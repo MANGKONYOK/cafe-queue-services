@@ -291,17 +291,19 @@ All authorization checks are enforced server-side inside Express middleware (`re
 ## 6. Configuration & Delivery Architecture
 
 ### 6.1 Environment Variable Specification (`.env.example`)
-Zero credentials or sensitive secrets are committed to version control. The repository provides `.env.example` with placeholders only. On startup with `NODE_ENV=production` the server exits if `SESSION_SECRET` is missing or still the placeholder, and the seed exits if a `SEED_*_PASSWORD` is missing:
+Zero credentials or sensitive secrets are committed to version control. The repository provides `server/.env.example` with the key names only (every value empty); each developer fills in `server/.env`, which Git ignores. On startup with `NODE_ENV=production` the server exits if `SESSION_SECRET` is missing or still the placeholder, and the seed exits if a `SEED_*_PASSWORD` is missing:
 
 | Variable Name | Required | Default (Development) | Purpose |
 | :--- | :---: | :--- | :--- |
-| `PORT` | Yes | `3000` | Port on which the Express HTTP server listens (bound to `0.0.0.0`). |
-| `NODE_ENV` | Yes | `development` | Runtime environment (`development`, `test`, `production`). |
-| `DATABASE_URL` | Yes | `postgresql://postgres:postgres@localhost:5432/omkoi_queue` | PostgreSQL 16 connection string. |
-| `SESSION_SECRET` | Yes | `change-me` placeholder (each developer sets a local random value) | Secret string used by `express-session` to sign cookie hashes. |
-| `SEED_ADMIN_PASSWORD` | For seeding | `change-me` placeholder | Password for seeded `admin@omkoi.coffee`. |
-| `SEED_STAFF_PASSWORD` | For seeding | `change-me` placeholder | Password for seeded `barista@omkoi.coffee` and `dessert@omkoi.coffee`. |
-| `SEED_CUSTOMER_PASSWORD`| For seeding | `change-me` placeholder | Password for seeded customer accounts. |
+| `PORT` | No | `3000` when empty | Port on which the Express HTTP server listens (bound to `0.0.0.0`). |
+| `NODE_ENV` | No | `development` when empty | Runtime environment (`development`, `test`, `production`). |
+| `DATABASE_URL` | Yes | none | PostgreSQL 16 connection string (`postgresql://<user>:<password>@<host>:<port>/<database>`). |
+| `TEST_DATABASE_URL` | For tests | none | Separate database for the automated tests. |
+| `SESSION_SECRET` | Yes | none (each developer sets a local random value) | Secret string used by `express-session` to sign cookie hashes. |
+| `SEED_ADMIN_PASSWORD` | For seeding | none | Password for seeded `admin@omkoi.coffee`. |
+| `SEED_STAFF_PASSWORD` | For seeding | none | Password for seeded `barista@omkoi.coffee` and `dessert@omkoi.coffee`. |
+| `SEED_CUSTOMER_PASSWORD`| For seeding | none | Password for seeded customer accounts. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local Docker only | none | Credentials of the local PostgreSQL container (`docker-compose.yml` reads them from `server/.env`). |
 
 Test-account passwords are shared through the private course handoff, never in Git or the PDF.
 

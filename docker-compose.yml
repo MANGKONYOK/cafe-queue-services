@@ -1,0 +1,20 @@
+# Local PostgreSQL 16 for development and tests (the app container arrives in Lab 5).
+# POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB come from server/.env (never committed).
+#   docker compose up -d db          # DB_PORT=5434 docker compose up -d db  if 5432 is taken
+services:
+  db:
+    image: postgres:16-alpine
+    env_file:
+      - server/.env
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - omkoi-db:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\""]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  omkoi-db:
