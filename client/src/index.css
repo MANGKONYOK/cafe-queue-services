@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Natural Luxury palette (SDS 1): roasted walnut / terracotta, highland mist lime-wash, pine olive. */
+@theme {
+  --color-walnut: #5b3a29;
+  --color-walnut-dark: #3f2619;
+  --color-terracotta: #b5653f;
+  --color-terracotta-dark: #96502f;
+  --color-mist: #f4f1e8;
+  --color-limewash: #e7e1d1;
+  --color-pine: #55613a;
+  --color-ink: #2b211c;
+  --font-sans: "Helvetica Neue", Arial, "Thonburi", sans-serif;
+}
+
+html,
+body {
+  background: var(--color-mist);
+  color: var(--color-ink);
+}
