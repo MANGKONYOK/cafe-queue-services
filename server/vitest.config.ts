@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomBytes } from "node:crypto";
 import { defineConfig } from "vitest/config";
 
 // API and integration tests run against a real, migrated PostgreSQL test database (TEST_DATABASE_URL in server/.env).
@@ -15,7 +16,7 @@ export default defineConfig({
     env: {
       NODE_ENV: "test",
       DATABASE_URL: testDatabaseUrl,
-      SESSION_SECRET: "test-only-session-secret-not-used-elsewhere",
+      SESSION_SECRET: randomBytes(24).toString("hex"),
     },
   },
 });

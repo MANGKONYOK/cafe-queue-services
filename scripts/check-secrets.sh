@@ -9,10 +9,10 @@ self=':!scripts/check-secrets.sh'
 if git grep -nIE 'BEGIN [A-Z ]*PRIVATE KEY' -- . "$self"; then fail=1; fi
 
 # 2. .env.example files are templates: key names only, every value empty.
-if git grep -nIE '^\s*[A-Z][A-Z0-9_]*\s*=\s*[^[:space:]]' -- '*.env.example'; then fail=1; fi
+if git grep -nIE '^[[:space:]]*[A-Z][A-Z0-9_]*[[:space:]]*=[[:space:]]*[^[:space:]]' -- '*.env.example'; then fail=1; fi
 
-# 3. Secret keys assigned a value anywhere else.
-if git grep -nIE '^\s*(SESSION_SECRET|POSTGRES_PASSWORD|SEED_[A-Z_]+_PASSWORD)\s*[=:]\s*[^[:space:]]' -- . "$self"; then fail=1; fi
+# 3. Secret keys assigned a value anywhere else (ignore Zod schema and runtime generator).
+if git grep -nIE '^[[:space:]]*(SESSION_SECRET|POSTGRES_PASSWORD|SEED_[A-Z_]+_PASSWORD)[[:space:]]*[=:][[:space:]]*[^[:space:]]' -- . "$self" | grep -vE ':[[:space:]]*(z\.string|randomBytes)\('; then fail=1; fi
 
 # 4. Connection strings with an embedded password (scheme://user:password@host).
 if git grep -nIE '[a-z]+://[^/[:space:]:@`<]+:[^@[:space:]`<]+@' -- . "$self"; then fail=1; fi
