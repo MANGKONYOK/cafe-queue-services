@@ -31,14 +31,14 @@ cp server/.env.example server/.env
 | `SESSION_SECRET` | Random string (`openssl rand -hex 32`); in `production` the server refuses to start unless it is at least 32 characters |
 | `SEED_ADMIN_PASSWORD`, `SEED_STAFF_PASSWORD`, `SEED_CUSTOMER_PASSWORD` | Passwords for the seeded accounts; `db:seed` refuses to run without them |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credentials for the local Docker database (`docker-compose.yml` reads them from `server/.env`); must match `DATABASE_URL` |
+| `DB_PORT` | Host port of the local Docker database (`5432` if empty); use another, e.g. `5434`, when 5432 is taken, and the same port in both URLs |
 
 `server/.env` is ignored by Git. Never commit real values; `npm run check:secrets` scans the tracked files.
 
 ## 3. Database
 
 ```bash
-npm run db:up                      # PostgreSQL 16 on localhost:5432 (dev + test databases), credentials from server/.env
-# DB_PORT=5434 npm run db:up       # if 5432 is taken; then use :5434 in server/.env
+npm run db:up                      # PostgreSQL 16 on localhost:$DB_PORT (dev + test databases), all settings from server/.env
 npm run install:all                # npm ci in server/ and client/
 npm run db:migrate                 # apply server/db/migrations
 npm run db:seed                    # 5 accounts, 4 counters (safe to re-run)

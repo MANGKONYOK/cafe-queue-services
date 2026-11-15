@@ -5,7 +5,7 @@
   "description": "Omkoi Station queue and service management (CPE 334 Theme 9). Root scripts delegate to server/ and client/.",
   "scripts": {
     "install:all": "npm --prefix server ci && npm --prefix client ci && npm --prefix e2e ci",
-    "db:up": "docker compose up -d db",
+    "db:up": "docker compose --env-file server/.env up -d db",
     "db:migrate": "npm --prefix server run db:migrate",
     "db:seed": "npm --prefix server run db:seed",
     "dev:server": "npm --prefix server run dev",

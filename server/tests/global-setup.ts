@@ -15,7 +15,14 @@ export default async function setup() {
   const admin = new URL(url);
   admin.pathname = "/postgres";
   const client = new pg.Client({ connectionString: admin.toString() });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (err) {
+    throw new Error(
+      `Cannot reach the test database at ${target.hostname}:${target.port || 5432} ` +
+        `(${(err as { code?: string }).code ?? "error"}). Is it running? Start it with: npm run db:up`,
+    );
+  }
   const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
   if (exists.rowCount === 0) await client.query(`CREATE DATABASE "${dbName.replace(/"/g, "")}"`);
   await client.end();
