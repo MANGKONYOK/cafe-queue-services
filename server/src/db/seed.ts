@@ -39,6 +39,13 @@ const CATEGORIES = [
     "1-on-1 green and roasted bean cupping and wholesale consultation.", 20, false],
 ] as const;
 
+/** BR-09: staff to counter assignments. ROASTERY_CONSULT has none, so only the admin serves it. */
+const ASSIGNMENTS: [string, string][] = [
+  ["barista@omkoi.coffee", "SLOW_BAR"],
+  ["barista@omkoi.coffee", "ESPRESSO_BAR"],
+  ["dessert@omkoi.coffee", "DESSERT_LOUNGE"],
+];
+
 /**
  * Idempotent seed (SDS 2.4): upserts on natural keys and never inserts explicit ids,
  * so SERIAL sequences stay correct. A re-seed does not overwrite `is_open`.
@@ -74,6 +81,14 @@ export async function seed(pool: Pool, passwords: SeedPasswords): Promise<void> 
          ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
            est_mins_per_ticket = EXCLUDED.est_mins_per_ticket, updated_at = CURRENT_TIMESTAMP`,
         [code, name, prefix, description, est, isOpen],
+      );
+    }
+    for (const [email, code] of ASSIGNMENTS) {
+      await client.query(
+        `INSERT INTO staff_counters (staff_id, category_id)
+         SELECT u.id, c.id FROM users u, service_categories c WHERE u.email = $1 AND c.code = $2
+         ON CONFLICT DO NOTHING`,
+        [email, code],
       );
     }
     await client.query("COMMIT");
