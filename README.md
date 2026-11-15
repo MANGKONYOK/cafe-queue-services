@@ -48,7 +48,7 @@ Seeded accounts (passwords are the `SEED_*` values from your `server/.env`; test
 
 | Email | Role | Notes |
 | --- | --- | --- |
-| `admin@omkoi.coffee` | `ADMIN` | Station manager, every counter |
+| `admin@omkoi.coffee` | `ADMIN` | Station manager: every counter, plus **Counters** (`/admin`) to create, edit, pause/resume counters and assign staff |
 | `barista@omkoi.coffee` | `STAFF` | Assigned to Slow Bar and Espresso Bar |
 | `dessert@omkoi.coffee` | `STAFF` | Assigned to Dessert Lounge |
 | `boom@omkoi.coffee`, `hongtae@omkoi.coffee` | `CUSTOMER` | Guests |
@@ -69,7 +69,7 @@ Production-style: `npm run build`, then `NODE_ENV=production npm --prefix server
 ```bash
 npm run test:server    # API + DB integration tests (needs the database from step 3)
 npm run test:client    # component tests (jsdom)
-npm run e2e            # Playwright journey (TEST-19) at 375/768/1280 px in your installed Google Chrome;
+npm run e2e            # Playwright: journey (TEST-19) at 375/768/1280 px + admin counters at 1280 px, in your installed Google Chrome;
                        # builds the client, resets + seeds the TEST database, serves on :3100
 npm run test:all       # all three
 npm run typecheck
@@ -86,9 +86,13 @@ Test IDs (`TEST-xx`) in the test names match `docs/sprints/sprint-1/sts-and-dod.
 | `POST` | `/api/auth/login` | Public |
 | `GET` | `/api/auth/me` | Signed in |
 | `POST` | `/api/auth/logout` | Signed in |
-| `GET` | `/api/categories` | Signed in |
+| `GET` | `/api/categories` | Signed in (each counter with `waitingCount`) |
+| `POST` | `/api/categories` | Admin: create a counter (`code`, `prefix`, `name`, `estMinsPerTicket`, optional `description`, `isOpen`) |
+| `PATCH` | `/api/categories/:id` | Admin: edit name, description, minutes, or pause/resume with `isOpen` |
+| `PUT` | `/api/categories/:id/staff` | Admin: set the staff on a counter (`staffIds`) |
+| `GET` | `/api/staff` | Admin: staff accounts and their counters |
 | `POST` | `/api/tickets` | Customer: join a counter (`categoryId`, `partySize` 1-8, optional `specialRequests`) |
-| `GET` | `/api/tickets/my` | Signed in: own tickets with `aheadCount` |
+| `GET` | `/api/tickets/my` | Signed in: own tickets with `aheadCount` and `estWaitMins` |
 | `GET` | `/api/tickets/:id` | Owner customer; staff on that counter; admin |
 | `POST` | `/api/tickets/:id/cancel` | Owner while `WAITING`; staff on that counter while `WAITING`/`CALLED`; admin |
 | `GET` | `/api/tickets?categoryId=&status=` | Staff (assigned counters), admin |
