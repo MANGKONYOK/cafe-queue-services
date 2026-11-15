@@ -41,6 +41,30 @@ export interface User {
   email: string;
   fullName: string;
   role: Role;
+  /** Counters a STAFF/ADMIN user may operate (BR-09); absent for customers. */
+  assignedCategoryIds?: number[];
+}
+
+export type TicketStatus = "WAITING" | "CALLED" | "SERVING" | "COMPLETED" | "NO_SHOW" | "CANCELLED";
+export const ACTIVE: TicketStatus[] = ["WAITING", "CALLED", "SERVING"];
+
+export interface Ticket {
+  id: number;
+  ticketCode: string;
+  categoryId: number;
+  categoryCode: string;
+  categoryName: string;
+  customerId: number;
+  customerName: string;
+  partySize: number;
+  specialRequests: string | null;
+  status: TicketStatus;
+  counterName: string | null;
+  completionSummary: string | null;
+  cancelReason: string | null;
+  noShowNote: string | null;
+  createdAt: string;
+  aheadCount: number | null;
 }
 
 export interface Category {
