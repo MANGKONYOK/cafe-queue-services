@@ -205,6 +205,7 @@ ON CONFLICT (code) DO UPDATE SET
 | :--- | :--- | :--- | :--- | :--- |
 | Sign-In | `/login` | Public | Email/password form; safe `401` banner (no hint which field was wrong). | `POST /api/auth/login` |
 | Customer Queue Portal | `/queue` | `CUSTOMER` | Category cards (open/paused), join form, my tickets with status, `aheadCount` and a cancel dialog. | `GET /api/categories`, `POST /api/tickets`, `GET /api/tickets/my`, `POST /api/tickets/:id/cancel` |
+| Counter Admin | `/admin` | `ADMIN` | One card per counter: pause/resume, edit name/minutes/description, staff checkboxes; new-counter form (`F-04`). | `GET /api/categories`, `GET /api/staff`, `POST`/`PATCH /api/categories`, `PUT /api/categories/:id/staff` |
 | Barista Counter Console | `/staff` | `STAFF`, `ADMIN` | One tab per assigned counter (Admin: all), status filter, **Call next**, Start serving, Complete / No-show / Cancel dialogs. | `GET /api/tickets`, `POST /api/categories/:id/call-next`, transition endpoints |
 
 - **Navigation:** On load the client calls `GET /api/auth/me`. `401` redirects to `/login`; after login `CUSTOMER` lands on `/queue` and `STAFF`/`ADMIN` on `/staff`. A route of another role redirects to the user's home. The header shows the user's name and a **Sign out** button. Hidden routes are a convenience only; the API enforces every permission (section 4).
@@ -238,7 +239,11 @@ All application errors return standard HTTP error status codes with an `error` e
 | `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) + Session Cookie | `400` Missing fields, `401` Invalid credentials |
 | `POST` | `/api/auth/logout` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"status":"logged_out"}`; session row deleted, cookie cleared | `401` Unauthenticated |
 | `GET` | `/api/auth/me` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) | `401` Unauthenticated |
-| `GET` | `/api/categories` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"categories":[...]}` | `401` Unauthenticated |
+| `GET` | `/api/categories` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"categories":[...]}` (each with `waitingCount`) | `401` Unauthenticated |
+| `POST` | `/api/categories` | `ADMIN` | `{"code","name","prefix","description","estMinsPerTicket","isOpen"}` | `201 Created` `{"category":{...}}` | `400` invalid (`BR-11`), `401`, `403`, `409` `DUPLICATE_CATEGORY` |
+| `PATCH` | `/api/categories/:id` | `ADMIN` | any of `{"name","description","estMinsPerTicket","isOpen"}` | `200 OK` `{"category":{...}}` | `400` (incl. `code`/`prefix`), `401`, `403`, `404` |
+| `PUT` | `/api/categories/:id/staff` | `ADMIN` | `{"staffIds":[2,3]}` | `200 OK` `{"categoryId","staffIds"}` | `400` non-`STAFF` id, `401`, `403`, `404` |
+| `GET` | `/api/staff` | `ADMIN` | None | `200 OK` `{"staff":[{id,fullName,email,categoryIds}]}` | `401`, `403` |
 | `POST` | `/api/tickets` | `CUSTOMER` | `{"categoryId":1,"partySize":2,"specialRequests":"V60 Drip"}` | `201 Created` `{"ticket":{...}}` | `400` Invalid party size / length (`BR-03`), `401` Unauth, `403` `STAFF`/`ADMIN` (`BR-09`), `404` Unknown category, `409` Active ticket exists (`BR-01`), `409` Category paused (`BR-02`) |
 | `GET` | `/api/tickets/my` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"tickets":[...]}` (caller's own tickets with `aheadCount`) | `401` Unauthenticated |
 | `GET` | `/api/tickets` | `STAFF` (assigned counters), `ADMIN` | Query: `?categoryId=&status=` | `200 OK` `{"tickets":[...]}` (ordered `seq_no ASC`; without `categoryId`, `STAFF` see only assigned counters) | `400` Invalid filter, `401` Unauth, `403` `CUSTOMER` role or unassigned `categoryId` (`BR-09`) |
@@ -271,7 +276,7 @@ All authorization checks are enforced server-side inside Express middleware (`re
 | `POST /api/tickets/:id/serve` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST /api/tickets/:id/complete` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST /api/tickets/:id/no-show` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
-| `POST/PATCH/PUT /api/categories/*` incl. staff assignment (Sprint 2) | `401` | `403 Forbidden` | `403 Forbidden` | Allowed | `requireRole(['ADMIN'])` |
+| `POST/PATCH/PUT /api/categories/*` incl. staff assignment, `GET /api/staff` (`F-04`) | `401` | `403 Forbidden` | `403 Forbidden` | Allowed | `requireRole(['ADMIN'])` |
 
 ---
 

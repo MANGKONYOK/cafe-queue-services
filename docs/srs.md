@@ -26,7 +26,7 @@ The **Omkoi Station Queue and Services Management System** provides a web applic
 | :--- | :---: | :--- |
 | **Customer (Walk-in Guest / Member)** | `CUSTOMER` | - Authenticate via email/password session.<br>- Browse active Omkoi service counters and real-time open/paused status.<br>- Join walk-in queue for an open category (`partySize` 1-8, optional dietary/brewing note).<br>- Monitor own ticket's live queue status and waiting position (`aheadCount`).<br>- Cancel own ticket while in `WAITING` status with a mandatory cancellation reason.<br>- *(Sprint 3)* Submit 1-5 star tasting feedback on own `COMPLETED` ticket. |
 | **Staff (Barista / Counter Operator)** | `STAFF` | - Authenticate via staff credentials.<br>- View the live queue of the counters assigned to them (`staff_counters`), filtered by category and status.<br>- Call the next waiting customer of an assigned counter (`WAITING -> CALLED`); the server picks the oldest `WAITING` ticket.<br>- Start preparation (`CALLED -> SERVING`) with assigned barista attribution.<br>- Complete service (`SERVING -> COMPLETED`) with a mandatory service completion summary.<br>- Mark absent guests as `NO_SHOW` (`CALLED -> NO_SHOW`) with an explanatory note.<br>- Cancel tickets with an operational reason if necessary. |
-| **Administrator (Station Manager)** | `ADMIN` | - Perform all `STAFF` queue operations on every counter (no assignment needed).<br>- *(Sprint 2)* Create, edit, pause and resume Omkoi service categories (`is_open` toggle) and assign staff to counters.<br>- *(Sprint 3)* Inspect station-wide operational analytics, wait-time averages and counter throughput metrics. |
+| **Administrator (Station Manager)** | `ADMIN` | - Perform all `STAFF` queue operations on every counter (no assignment needed).<br>- Create, edit, pause and resume Omkoi service categories (`is_open` toggle) and assign staff to counters (Sprint 1, `F-04`).<br>- *(Sprint 3)* Inspect station-wide operational analytics, wait-time averages and counter throughput metrics. |
 
 ---
 
@@ -43,8 +43,8 @@ The **Omkoi Station Queue and Services Management System** provides a web applic
   - Complete barista state machine: `WAITING -> CALLED -> SERVING -> COMPLETED / NO_SHOW / CANCELLED`.
   - Backend-enforced role and ownership access control (HTTP 401/403).
   - Health (`/api/health`) and database readiness (`/api/ready`) probes.
+  - Admin counter management: create and edit counters, pause and resume intake, and assign staff (`F-04`, moved from Sprint 2).
 - **Sprint 2 (Operational Expansion):**
-  - Admin service counter management (create, update, pause/resume intake).
   - Highland beverage and dessert itemization on active tickets (`ticket_items`).
   - Read access to the state-transition audit trail (`GET /api/tickets/:id/events`; the `ticket_events` rows themselves are written from Sprint 1) and barista recall tracking.
 - **Sprint 3 (Customer Feedback & Operational Intelligence):**
@@ -68,9 +68,9 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
 ## 4. Functional Requirements (`FR-xx`)
 
 - **`FR-01` (Authentication & Session Lifecycle):** The system shall authenticate users via email and password (`POST /api/auth/login`), verify hashes against stored bcrypt digests, persist session state in PostgreSQL (`user_sessions`), return authenticated profiles via `GET /api/auth/me` and invalidate sessions on `POST /api/auth/logout`.
-- **`FR-02` (Service Category Directory):** The system shall provide an endpoint (`GET /api/categories`) returning all Omkoi Station service counters, including category code, display name, description, ticket prefix (`SB`, `EB`, `DL`, `RC`), estimated wait time per ticket and active intake status (`is_open: true/false`).
+- **`FR-02` (Service Category Directory):** The system shall provide an endpoint (`GET /api/categories`) returning all Omkoi Station service counters, including category code, display name, description, ticket prefix (`SB`, `EB`, `DL`, `RC`), estimated wait time per ticket, active intake status (`is_open: true/false`) and the number of `WAITING` tickets (`waitingCount`).
 - **`FR-03` (Walk-In Queue Ticket Creation):** Authenticated Customers shall be able to create a queue ticket (`POST /api/tickets`) for an open category by supplying `categoryId`, `partySize` (1-8) and optional `specialRequests` (max 280 characters), receiving an initial ticket in `WAITING` status with an auto-sequenced code (e.g., `SB-001`). `STAFF` and `ADMIN` accounts cannot create tickets (`403`, `BR-09`).
-- **`FR-04` (Customer Live Queue Tracking):** Authenticated Customers shall be able to view their own active and historical tickets (`GET /api/tickets/my`, `GET /api/tickets/:id`), displaying status, assigned counter, timestamps and the number of `WAITING` tickets ahead in the same category.
+- **`FR-04` (Customer Live Queue Tracking):** Authenticated Customers shall be able to view their own active and historical tickets (`GET /api/tickets/my`, `GET /api/tickets/:id`), displaying status, assigned counter, timestamps, the number of `WAITING` tickets ahead in the same category (`aheadCount`) and, while waiting, an estimated wait (`estWaitMins` = `aheadCount` x the counter's minutes per guest).
 - **`FR-05` (Customer Self-Cancellation):** Authenticated Customers shall be able to cancel their own ticket (`POST /api/tickets/:id/cancel`) while in `WAITING` status by supplying a non-empty `cancelReason`.
 - **`FR-06` (Staff Live Queue Console):** Authenticated Staff shall be able to list the queue tickets of the counters assigned to them, and Admin users those of every counter (`GET /api/tickets`), with optional query filters for `categoryId` and `status`, ordered FIFO by the per-counter sequence number (`seq_no ASC`, oldest first).
 - **`FR-07` (Staff Service Lifecycle Execution):** Authenticated Staff (on their assigned counters, `BR-09`) and Admin users (on every counter) shall be able to transition ticket states through:
@@ -79,7 +79,7 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
   - `POST /api/tickets/:id/complete` (`SERVING -> COMPLETED`, records `completed_at` and mandatory `completionSummary`)
   - `POST /api/tickets/:id/no-show` (`CALLED -> NO_SHOW`, records `no_show_at` and mandatory `noShowNote`)
   - `POST /api/tickets/:id/cancel` (`WAITING/CALLED -> CANCELLED`, records `cancelled_at` and mandatory `cancelReason`)
-- **`FR-08` (Admin Category Management - Sprint 2):** Admin users shall be able to create, update and toggle the open/paused intake state (`is_open`) of service categories (`POST /api/categories`, `PATCH /api/categories/:id`) and set which staff are assigned to each category (`PUT /api/categories/:id/staff`).
+- **`FR-08` (Admin Category Management - Sprint 1):** Admin users shall be able to create, update and toggle the open/paused intake state (`is_open`) of service categories (`POST /api/categories`, `PATCH /api/categories/:id`), list staff accounts (`GET /api/staff`) and set which staff are assigned to each category (`PUT /api/categories/:id/staff`).
 - **`FR-09` (Ticket Itemization & Audit Log - Sprint 2):** The system shall expose the immutable log of every state transition (`ticket_events`, written since Sprint 1 by `FR-03`, `FR-05` and `FR-07`) through `GET /api/tickets/:id/events` and allow attaching beverage/pastry items to tickets (`POST /api/tickets/:id/items`).
 - **`FR-10` (Customer Feedback & Operational Analytics - Sprint 3):** Customers shall be able to submit a 1-5 star rating on their own `COMPLETED` tickets (`POST /api/tickets/:id/feedback`) and Staff/Admin shall access aggregated operational metrics (`GET /api/analytics/summary`).
 
@@ -105,6 +105,8 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
 - **`BR-08` (Single Feedback Submission - Sprint 3):** Feedback ratings (1-5 stars) can only be submitted once per ticket and only on tickets in `COMPLETED` status. Duplicate feedback returns HTTP `409 Conflict`.
 - **`BR-09` (Staff Counter Scope & Ticket Creation):** A `STAFF` user may list, call, serve, complete, mark no-show or cancel tickets only in categories assigned to them in `staff_counters`; any other category returns HTTP `403 Forbidden` (`FORBIDDEN`). `ADMIN` users act on every category. Only `CUSTOMER` accounts create tickets; `POST /api/tickets` by `STAFF` or `ADMIN` returns `403`.
 - **`BR-10` (Call-Next FIFO Ordering):** Calling a customer always takes the oldest `WAITING` ticket (lowest `seq_no`) of the chosen category; the client cannot choose which ticket is called. An empty queue returns HTTP `409 Conflict` (`QUEUE_EMPTY`). Two simultaneous call-next requests on one category call two different tickets.
+- **`BR-11` (Counter Identity):** A counter's `code` (3-30 characters, `A-Z`, digits, `_`) and `prefix` (2-5 letters) are unique and never change after creation, because issued ticket codes use them; a duplicate returns HTTP `409 Conflict` (`DUPLICATE_CATEGORY`). `estMinsPerTicket` is an integer from 1 to 240.
+- **`BR-12` (Pause Blocks New Joins Only):** Pausing a counter (`is_open = false`) refuses new joins (`BR-02`) but never strands guests already in its queue: their `WAITING`, `CALLED` and `SERVING` tickets can still be called, served, completed, marked no-show or cancelled.
 
 ---
 
@@ -137,6 +139,7 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
 7. **Only Customers Create Tickets:** The ticket owner is always the guest, so `BR-01` and `BR-06` always apply to the guest. Staff-created walk-in tickets were dropped from Sprint 1 (`Q-01`).
 8. **Concurrency Strategy (`BR-01`, `BR-07`, `NFR-06`):** The join transaction first runs `UPDATE service_categories SET next_seq = next_seq + 1 WHERE id = $1 AND is_open RETURNING next_seq - 1`, which takes the category row lock (joins to one counter run one at a time), enforces `BR-02` and yields the number. A partial unique index on active tickets backs up `BR-01`.
 9. **Migrations:** Schema changes are numbered SQL migrations in `server/db/migrations/`, applied in order by `node-pg-migrate` (`npm run db:migrate`) and recorded in its `pgmigrations` table. Tests run against a migrated and seeded PostgreSQL database.
+10. **`F-04` Moved into Sprint 1:** The team ships Sprint 1 in three PRs (baseline, `F-01`, then `F-02` + `F-03` + `F-04`). Admin counter management joined the third PR so the release can pause a counter (`BR-02`) and assign staff (`BR-09`) from the UI instead of the database (`C-18`).
 
 ---
 

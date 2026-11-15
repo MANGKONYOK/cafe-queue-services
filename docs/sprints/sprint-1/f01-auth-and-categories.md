@@ -3,7 +3,7 @@
 **Feature ID:** `F-01`  
 **Owning Requirements:** `FR-01`, `FR-02`, `BR-02`, `NFR-01`, `NFR-02`, `NFR-03`, `NFR-04`  
 **Dependencies:** None (first feature). Needs migration `001_auth_and_categories` and the seed.  
-**Contract Version:** 1.2 (see section 9)  
+**Contract Version:** 1.3 (see section 9)  
 
 ---
 
@@ -54,7 +54,8 @@ Feature `F-01` establishes the foundational security, identity and service disco
           "prefix": "SB",
           "description": "Handcrafted single-origin highland micro-lots.",
           "estMinsPerTicket": 12,
-          "isOpen": true
+          "isOpen": true,
+          "waitingCount": 2
         },
         {
           "id": 4,
@@ -63,7 +64,8 @@ Feature `F-01` establishes the foundational security, identity and service disco
           "prefix": "RC",
           "description": "1-on-1 green and roasted bean cupping.",
           "estMinsPerTicket": 20,
-          "isOpen": false
+          "isOpen": false,
+          "waitingCount": 0
         }
       ]
     }
@@ -149,3 +151,4 @@ Feature `F-01` establishes the foundational security, identity and service disco
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: login, me, logout, categories, health/ready; `AC-01`-`AC-03`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Added `AC-13` logout and expiry, cookie and session rules, data, rules, failure cases, permissions, UI; removed the literal seed password (`C-04`, `C-05`, `C-15`). |
 | 1.2 | 2026-11-15 | issue #3 (F-03) | @kmood-Sakura | Login and `/me` return `assignedCategoryIds` for `STAFF`/`ADMIN` so the console shows the right counter tabs, as suggested in the PR #4 review (`C-17`). Verified by `TEST-16`. |
+| 1.3 | 2026-11-15 | issue #3 (`F-04` contract commit) | @kmood-Sakura | `GET /api/categories` adds `waitingCount` (number of `WAITING` tickets) for the queue page and the admin page (`C-19`). Verified by `TEST-03`. |
