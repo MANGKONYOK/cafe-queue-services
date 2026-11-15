@@ -82,7 +82,9 @@ function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel?: () => voi
       </div>
       <p className="text-sm text-ink/75">{ticket.categoryName}</p>
       {ticket.status === "WAITING" && (
-        <p className="text-sm font-medium text-walnut">{ticket.aheadCount === 0 ? "0 ahead - you're next" : `${ticket.aheadCount} ahead`}</p>
+        <p className="text-sm font-medium text-walnut">
+          {ticket.aheadCount === 0 ? "0 ahead - you're next" : `${ticket.aheadCount} ahead · about ${ticket.estWaitMins} min`}
+        </p>
       )}
       {ticket.status === "CALLED" && (
         <p className="text-sm font-semibold text-terracotta-dark">Please go to {ticket.counterName ?? "the counter"} now.</p>

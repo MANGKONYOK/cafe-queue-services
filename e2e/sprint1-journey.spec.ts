@@ -1,7 +1,5 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
-
-const CUSTOMER = { email: "boom@omkoi.coffee", password: () => process.env.E2E_CUSTOMER_PASSWORD! };
-const STAFF_PASSWORD = () => process.env.E2E_STAFF_PASSWORD!;
+import { expect, test } from "@playwright/test";
+import { CUSTOMER, STAFF_PASSWORD, expectNoHorizontalScroll, shot, signIn } from "./support/helpers.js";
 
 // Each viewport serves a different counter with the staff member assigned to it (BR-09).
 const PLAN: Record<string, { prefix: string; staff: string }> = {
@@ -9,21 +7,6 @@ const PLAN: Record<string, { prefix: string; staff: string }> = {
   "tablet-768": { prefix: "EB", staff: "barista@omkoi.coffee" },
   "desktop-1280": { prefix: "DL", staff: "dessert@omkoi.coffee" },
 };
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-}
-
-async function expectNoHorizontalScroll(page: Page) {
-  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-  expect(fits, "page must not scroll horizontally (NFR-05)").toBe(true);
-}
-
-const shot = (page: Page, info: TestInfo, name: string) =>
-  page.screenshot({ path: info.outputPath(`${info.project.name}-${name}.png`), fullPage: true });
 
 test("TEST-19 / AC-01, AC-04, AC-10, AC-13, NFR-05: join, serve, persisted result, sign out", async ({ page, browser }, info) => {
   const { prefix, staff } = PLAN[info.project.name];

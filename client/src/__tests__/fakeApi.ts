@@ -20,14 +20,14 @@ export function fakeApi(routes: Record<string, Handler>) {
 }
 
 export const categories = [
-  { id: 1, code: "SLOW_BAR", name: "Omkoi Specialty Slow Bar (Pour-Over & Syphon)", prefix: "SB", description: null, estMinsPerTicket: 12, isOpen: true },
-  { id: 2, code: "ESPRESSO_BAR", name: "Highland Espresso & Artisan Beverage Bar", prefix: "EB", description: null, estMinsPerTicket: 5, isOpen: true },
-  { id: 3, code: "DESSERT_LOUNGE", name: "Chiang Rai Mist Tea & Highland Dessert Table", prefix: "DL", description: null, estMinsPerTicket: 15, isOpen: true },
-  { id: 4, code: "ROASTERY_CONSULT", name: "Omkoi Roastery & Bean Wholesale Consultation", prefix: "RC", description: null, estMinsPerTicket: 20, isOpen: false },
+  { id: 1, code: "SLOW_BAR", name: "Omkoi Specialty Slow Bar (Pour-Over & Syphon)", prefix: "SB", description: null, estMinsPerTicket: 12, isOpen: true, waitingCount: 0 },
+  { id: 2, code: "ESPRESSO_BAR", name: "Highland Espresso & Artisan Beverage Bar", prefix: "EB", description: null, estMinsPerTicket: 5, isOpen: true, waitingCount: 0 },
+  { id: 3, code: "DESSERT_LOUNGE", name: "Chiang Rai Mist Tea & Highland Dessert Table", prefix: "DL", description: null, estMinsPerTicket: 15, isOpen: true, waitingCount: 0 },
+  { id: 4, code: "ROASTERY_CONSULT", name: "Omkoi Roastery & Bean Wholesale Consultation", prefix: "RC", description: null, estMinsPerTicket: 20, isOpen: false, waitingCount: 0 },
 ];
 
 export const ticket = (over: Record<string, unknown> = {}) => ({
   id: 10, ticketCode: "SB-001", categoryId: 1, categoryCode: "SLOW_BAR", categoryName: categories[0].name,
   customerId: 4, customerName: "Boom", partySize: 2, specialRequests: null, status: "WAITING", counterName: null,
-  completionSummary: null, cancelReason: null, noShowNote: null, createdAt: "2026-11-15T03:00:00Z", aheadCount: 0, ...over,
+  completionSummary: null, cancelReason: null, noShowNote: null, createdAt: "2026-11-15T03:00:00Z", aheadCount: 0, estWaitMins: 0, ...over,
 });

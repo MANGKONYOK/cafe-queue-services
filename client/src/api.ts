@@ -65,6 +65,8 @@ export interface Ticket {
   noShowNote: string | null;
   createdAt: string;
   aheadCount: number | null;
+  /** aheadCount x the counter's minutes per guest; null once no longer WAITING. */
+  estWaitMins: number | null;
 }
 
 export interface Category {
@@ -75,6 +77,14 @@ export interface Category {
   description: string | null;
   estMinsPerTicket: number;
   isOpen: boolean;
+  waitingCount: number;
+}
+
+export interface StaffMember {
+  id: number;
+  fullName: string;
+  email: string;
+  categoryIds: number[];
 }
 
 export const homeFor = (role: Role) => (role === "CUSTOMER" ? "/queue" : "/staff");

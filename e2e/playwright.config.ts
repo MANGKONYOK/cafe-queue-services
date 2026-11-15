@@ -32,8 +32,8 @@ export default defineConfig({
   },
   // NFR-05 viewports. Each project uses a different counter so every run starts at <PREFIX>-001.
   projects: [
-    { name: "mobile-375", use: { viewport: { width: 375, height: 667 } } },
-    { name: "tablet-768", use: { viewport: { width: 768, height: 1024 } } },
+    { name: "mobile-375", use: { viewport: { width: 375, height: 667 } }, testIgnore: /admin-counters/ },
+    { name: "tablet-768", use: { viewport: { width: 768, height: 1024 } }, testIgnore: /admin-counters/ },
     { name: "desktop-1280", use: { viewport: { width: 1280, height: 800 } } },
   ],
   webServer: {
