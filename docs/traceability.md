@@ -53,7 +53,7 @@ Every requirement (`FR-xx`), domain business rule (`BR-xx`) and non-functional r
 
 ## 4. Approved Changes
 
-Changes to the first baseline commit (`a9c7a02`), raised in the review of PR #4. Each is approved when the teammate approves PR #4.
+Changes to the first baseline commit (`a9c7a02`). `C-01`–`C-15` were raised in the review of PR #4 and approved by its merge; later entries are approved by the merge of the PR that records them.
 
 | ID | Change | Reason | Affects |
 | :--- | :--- | :--- | :--- |
@@ -72,3 +72,4 @@ Changes to the first baseline commit (`a9c7a02`), raised in the review of PR #4.
 | `C-13` | SRS §3.3 marked as not planned; removed `ticket_type` from the Sprint 1 schema. | No FR, feature or sprint carried them. | SRS, SDS |
 | `C-14` | Added the Lab 5 delivery item, the Sprint 1 scope rationale and risks to the plan. | Part D and the handout's Lab 5 timing. | Plan |
 | `C-15` | Seed passwords and the session secret come only from the environment; production fails fast. | No published fallback secrets. | SRS, SDS, `F-01`, STS |
+| `C-16` | `.env.example` holds key names only (empty values); `TEST_DATABASE_URL` and the local `POSTGRES_*` keys added; `PORT`/`NODE_ENV` default when empty; `SESSION_SECRET` must be at least 32 characters in production. | A template must not carry values, not even local defaults (raised during F-01, `e844923`; recorded in the PR #5 review). | SRS `NFR-02`, SDS 6.1 |
