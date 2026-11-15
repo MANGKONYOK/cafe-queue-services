@@ -201,6 +201,11 @@ export function QueuePage() {
           onSubmit={async (cancelReason) => {
             try {
               await api(`/tickets/${cancelling.id}/cancel`, { method: "POST", body: { cancelReason } });
+              setError(null);
+            } catch (e) {
+              // e.g. 409 when staff called the ticket just before the guest confirmed (f02 section 6)
+              if (e instanceof ApiError && e.status === 401) sessionEnded();
+              else setError((e as Error).message);
             } finally {
               setCancelling(null);
               void load();

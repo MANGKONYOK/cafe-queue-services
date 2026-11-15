@@ -19,7 +19,7 @@ const DIALOG = {
 
 /** Staff and admin console (F-03): one tab per assigned counter, call next, serve, complete, no-show, cancel. */
 export function StaffPage() {
-  const { user, sessionEnded } = useAuth();
+  const { user, sessionEnded, refresh } = useAuth();
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [tab, setTab] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>("ACTIVE");
@@ -45,15 +45,18 @@ export function StaffPage() {
 
   const load = useCallback(async () => {
     try {
-      const c = categories ?? (await api<{ categories: Category[] }>("/categories")).categories;
-      if (!categories) setCategories(c);
-      const id = tab ?? c.find((x) => user?.assignedCategoryIds?.includes(x.id))?.id;
+      // Re-read the counters and the user's assignments on every refresh, so a counter the admin
+      // just created, a rename, a pause or an assignment change shows up without a page reload.
+      const [c, me] = await Promise.all([api<{ categories: Category[] }>("/categories"), refresh()]);
+      setCategories(c.categories);
+      if (!me) return;
+      const id = tab ?? c.categories.find((x) => me.assignedCategoryIds?.includes(x.id))?.id;
       if (id === undefined) return setTickets([]);
       setTickets((await api<{ tickets: Ticket[] }>(`/tickets?categoryId=${id}`)).tickets);
     } catch (e) {
       fail(e);
     }
-  }, [categories, tab, user, fail]);
+  }, [tab, refresh, fail]);
   usePolling(load);
   // Switching counters fetches that counter's queue at once instead of waiting for the next poll.
   useEffect(() => {
@@ -93,6 +96,7 @@ export function StaffPage() {
                 role="tab"
                 aria-selected={c.id === current}
                 onClick={() => {
+                  if (c.id === current) return; // already showing this counter: keep the list
                   setTab(c.id);
                   setTickets(null);
                 }}

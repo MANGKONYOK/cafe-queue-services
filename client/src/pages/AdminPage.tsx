@@ -32,6 +32,7 @@ function CounterCard({
   const [form, setForm] = useState({ name: category.name, estMinsPerTicket: String(category.estMinsPerTicket), description: category.description ?? "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const { sessionEnded } = useAuth();
   const current = picked ?? assigned;
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -40,6 +41,10 @@ function CounterCard({
       await fn();
       return true;
     } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        sessionEnded();
+        return false;
+      }
       const f = fieldsOf(e);
       if (Object.keys(f).length) setErrors(f);
       else onError((e as Error).message);
@@ -87,7 +92,18 @@ function CounterCard({
         >
           {category.isOpen ? "Pause" : "Resume"}
         </button>
-        <button type="button" onClick={() => setEditing((v) => !v)} className="rounded-md border border-walnut/30 px-3 py-1.5 text-sm">
+        <button
+          type="button"
+          onClick={() => {
+            if (!editing) {
+              // Open with the latest values from the server, not those from the first render.
+              setForm({ name: category.name, estMinsPerTicket: String(category.estMinsPerTicket), description: category.description ?? "" });
+              setErrors({});
+            }
+            setEditing((v) => !v);
+          }}
+          className="rounded-md border border-walnut/30 px-3 py-1.5 text-sm"
+        >
           {editing ? "Close" : "Edit"}
         </button>
       </div>
@@ -151,6 +167,7 @@ function CounterCard({
 }
 
 function NewCounterForm({ onCreated }: { onCreated: () => void }) {
+  const { sessionEnded } = useAuth();
   const empty = { code: "", prefix: "", name: "", estMinsPerTicket: "10", description: "" };
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -171,6 +188,7 @@ function NewCounterForm({ onCreated }: { onCreated: () => void }) {
       setForm(empty);
       onCreated();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return sessionEnded();
       const f = fieldsOf(err);
       if (Object.keys(f).length) setErrors(f);
       else setBanner((err as Error).message);

@@ -2,13 +2,13 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Pool } from "../db/pool.js";
 import { CUSTOMER_CANCEL_FROM, STATUSES, TRANSITIONS, ACTIVE_STATUSES, type TicketStatus } from "../domain/tickets.js";
-import { asyncHandler, forbidden, notFound, validationError, zodFields } from "../errors.js";
+import { PG_INT_MAX, asyncHandler, forbidden, notFound, parseId, validationError, zodFields } from "../errors.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { assignedCategoryIds, canOperate } from "../services/access.js";
 import { findTicket, joinQueue, listEvents, listTickets, toTicket, transition } from "../services/tickets.js";
 
 const joinBody = z.object({
-  categoryId: z.number({ error: "categoryId must be a positive integer." }).int().positive(),
+  categoryId: z.number({ error: "categoryId must be a positive integer." }).int().positive().max(PG_INT_MAX, "categoryId is not a valid id."),
   partySize: z.number({ error: "partySize must be an integer from 1 to 8." }).int().min(1).max(8),
   specialRequests: z
     .string()
@@ -27,8 +27,12 @@ const completeBody = text("completionSummary", 5, 500);
 const noShowBody = text("noShowNote", 3, 200);
 
 const listQuery = z.object({
-  categoryId: z.coerce.number().int().positive().optional(),
-  status: z.enum([...STATUSES, "ACTIVE"]).optional(),
+  // An empty value (?categoryId=&status=) means "not given".
+  categoryId: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.coerce.number().int().positive().max(PG_INT_MAX, "categoryId is not a valid id.").optional(),
+  ),
+  status: z.preprocess((v) => (v === "" ? undefined : v), z.enum([...STATUSES, "ACTIVE"]).optional()),
 });
 
 const parse = <T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> => {
@@ -37,10 +41,7 @@ const parse = <T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> =>
   return r.data;
 };
 
-const ticketId = (req: Request) => {
-  const id = Number(req.params.id);
-  return Number.isInteger(id) && id > 0 && id <= 2147483647 ? id : null;
-};
+const ticketId = (req: Request) => parseId(String(req.params.id));
 
 export function ticketsRouter(pool: Pool) {
   const router = Router();

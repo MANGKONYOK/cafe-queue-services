@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Pool } from "../db/pool.js";
 import { withTx } from "../db/tx.js";
-import { AppError, asyncHandler, forbidden, notFound, validationError, zodFields } from "../errors.js";
+import { AppError, PG_INT_MAX, asyncHandler, forbidden, notFound, parseId, validationError, zodFields } from "../errors.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { canOperate } from "../services/access.js";
 import { callNext, findTicket, toTicket } from "../services/tickets.js";
@@ -47,7 +47,7 @@ const patchBody = z
   });
 const staffBody = z.object({
   staffIds: z
-    .array(z.number().int().positive(), { error: "staffIds must be an array of staff ids." })
+    .array(z.number().int().positive().max(PG_INT_MAX), { error: "staffIds must be an array of staff ids." })
     .refine((ids) => new Set(ids).size === ids.length, "staffIds must not repeat."),
 });
 
@@ -75,10 +75,7 @@ const parse = <T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> =>
   return r.data;
 };
 
-const categoryIdParam = (raw: string) => {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 && id <= 2147483647 ? id : null;
-};
+const categoryIdParam = parseId;
 
 const PATCH_COLUMNS: Record<string, string> = {
   name: "name",

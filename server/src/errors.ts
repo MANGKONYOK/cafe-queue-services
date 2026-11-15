@@ -18,6 +18,15 @@ export const notFound = () => new AppError(404, "NOT_FOUND", "Resource not found
 export const validationError = (fields: Record<string, string>) =>
   new AppError(400, "VALIDATION_ERROR", "The request is not valid.", { fields });
 
+/** Largest value of a PostgreSQL INTEGER (INT4): ids above it are a 400, never a database error. */
+export const PG_INT_MAX = 2147483647;
+
+/** A positive id that fits an INTEGER column, from a path segment; null when it is not one. */
+export const parseId = (raw: string) => {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 && id <= PG_INT_MAX ? id : null;
+};
+
 /** Turns a zod failure into `details.fields` ({ field: message }). */
 export const zodFields = (issues: { path: PropertyKey[]; message: string }[]) =>
   Object.fromEntries(issues.map((i) => [String(i.path[0] ?? "body"), i.message]));

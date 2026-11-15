@@ -22,7 +22,7 @@ if git grep -nIE '[a-z]+://[^/[:space:]:@`<]+:[^@[:space:]`<]+@' -- . "$self"; t
 if git ls-files | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -vE '\.env\.example$'; then fail=1; fi
 
 # 6. The ignore rules must keep real env files and dependencies out of Git.
-for p in server/.env client/.env server/node_modules; do
+for p in server/.env client/.env server/node_modules client/node_modules e2e/node_modules; do
   if ! git check-ignore -q --no-index "$p"; then echo "$p is not ignored by .gitignore"; fail=1; fi
 done
 
