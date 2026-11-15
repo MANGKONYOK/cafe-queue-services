@@ -18,6 +18,10 @@ export const notFound = () => new AppError(404, "NOT_FOUND", "Resource not found
 export const validationError = (fields: Record<string, string>) =>
   new AppError(400, "VALIDATION_ERROR", "The request is not valid.", { fields });
 
+/** Turns a zod failure into `details.fields` ({ field: message }). */
+export const zodFields = (issues: { path: PropertyKey[]; message: string }[]) =>
+  Object.fromEntries(issues.map((i) => [String(i.path[0] ?? "body"), i.message]));
+
 /** Express 4 does not catch rejected promises; route them to the error handler. */
 export const asyncHandler =
   (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler =>
