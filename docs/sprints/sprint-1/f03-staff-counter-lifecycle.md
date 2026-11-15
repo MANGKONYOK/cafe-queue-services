@@ -3,7 +3,7 @@
 **Feature ID:** `F-03`  
 **Owning Requirements:** `FR-06`, `FR-07`, `BR-04`, `BR-05`, `BR-06`, `BR-09`, `BR-10`, `NFR-03`, `NFR-05`, `NFR-06`  
 **Dependencies:** `F-01` (session, roles), `F-02` (tickets). Needs migration `003_staff_counters` and the staff assignments in the seed.  
-**Contract Version:** 1.2 (see section 9)  
+**Contract Version:** 1.3 (see section 9)  
 
 ---
 
@@ -134,3 +134,4 @@ Every transition is a conditional `UPDATE ... WHERE id = $1 AND status = <expect
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: staff console and lifecycle; `AC-10`-`AC-12`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Server-side call-next (`BR-10`) replaces `/:id/call`; staff counter scope (`BR-09`) with `staff_counters`; conditional-update transitions; staff cancel in `AC-12`; `AC-14`, `AC-15`; data, rules, failure cases, permissions, UI (`C-01`, `C-02`, `C-05`). |
 | 1.2 | 2026-11-15 | issue #3 (F-03) | @kmood-Sakura | Tabs come from `assignedCategoryIds` (`C-17`); a tab change loads that queue immediately (found by `TEST-19`). |
+| 1.3 | 2026-11-15 | `422efbb` (PR #6 review) | @kmood-Sakura | Clicking the open tab keeps the list; every refresh re-reads counters and `/api/auth/me`, so new counters and assignment changes appear without a reload; empty `?categoryId=&status=` means "not given" and a `categoryId` above INT4 is `400` (`C-20`). Verified by `TEST-14`, `TEST-17`, `TEST-25`. |

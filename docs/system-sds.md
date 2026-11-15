@@ -213,7 +213,7 @@ ON CONFLICT (code) DO UPDATE SET
 - **Empty:** "No active tickets - join a counter below" on `/queue`; "No guests waiting" per counter on `/staff`.
 - **Validation:** Forms validate on submit with the same limits as the API (`partySize` 1-8, notes 3-200 or 5-500 characters) and show the message under the field. API `400 details` are shown the same way.
 - **Errors:** `401` redirects to `/login`; `403`, `404` and `409` show the server's safe `message` in a banner and refresh the list; network or `5xx` errors show "Something went wrong - try again" without technical detail.
-- **Refresh:** `/queue` and `/staff` refresh every 10 seconds while the page is visible and after every action.
+- **Refresh:** `/queue`, `/staff` and `/admin` refresh every 10 seconds while the page is visible and after every action; `/staff` also re-reads the counters and `/api/auth/me`, so counters created or reassigned by the admin appear without a reload.
 - **Responsive:** No horizontal scroll at 375, 768 and 1280 px (`NFR-05`).
 
 ### 3.2 Standard API Envelope & Error Handling
@@ -255,6 +255,8 @@ All application errors return standard HTTP error status codes with an `error` e
 | `POST` | `/api/tickets/:id/no-show` | `STAFF` (assigned counter), `ADMIN` | `{"noShowNote":"Called 3x over 5 mins, no response"}` | `200 OK` `{"ticket":{...}}` | `400` Missing note (`BR-05`), `403` if `CUSTOMER` or unassigned counter, `404` Not found, `409` Not in `CALLED` state (`BR-04`) |
 
 Checks run in a fixed order so every endpoint refuses predictably: `401` session -> `403` role -> `403` ownership/counter scope -> `404` -> `400` body -> `409` rule. For a `CUSTOMER`, a ticket that is not theirs returns `403` whether or not it exists.
+
+Ids in paths, bodies and query strings must fit a PostgreSQL `INTEGER` (1 to 2147483647); anything else is `400 VALIDATION_ERROR` (or `404`/`403` for a path id), never a database error. An empty query value (`?categoryId=&status=`) counts as not given.
 
 ---
 

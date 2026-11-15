@@ -3,7 +3,7 @@
 **Feature ID:** `F-04`  
 **Owning Requirements:** `FR-08`, `BR-02`, `BR-09`, `BR-11`, `BR-12`  
 **Dependencies:** `F-01` (session, roles, categories), `F-03` (`staff_counters`, staff scope). No new migration.  
-**Contract Version:** 1.0 (see section 9)  
+**Contract Version:** 1.1 (see section 9)  
 
 ---
 
@@ -79,7 +79,7 @@ Unauthenticated requests receive `401`.
 - **Header:** `ADMIN` sees **Console** (`/staff`) and **Counters** (`/admin`); other roles never see the link, and `/admin` redirects them to their home.
 - **`/admin`:** one card per counter with name, prefix, `OPEN`/`PAUSED`, waiting count, minutes per guest and description; **Pause**/**Resume** button; **Edit** form (name, minutes, description); staff checkboxes with **Save staff**.
 - **New counter form:** code, prefix, name, minutes, optional description; field errors from the API are shown under each field.
-- **States:** loading; empty "No counters yet"; `400`/`409` messages in a banner; buttons disabled while a request is pending.
+- **States:** loading; empty "No counters yet"; `400`/`409` messages in a banner; a `401` sends the admin to sign-in; **Edit** always opens with the latest values; buttons disabled while a request is pending.
 
 ---
 
@@ -121,3 +121,4 @@ Unauthenticated requests receive `401`.
 | Version | Date | Commit | Author | Change |
 | :--- | :--- | :--- | :--- | :--- |
 | 1.0 | 2026-11-15 | issue #3 (F-04 contract, before code) | @kmood-Sakura | First contract. `F-04` moved from Sprint 2 into Sprint 1 and shipped in the issue #3 PR (`C-18`); `BR-11`, `BR-12`, `AC-17`-`AC-20`, `TEST-21`-`TEST-25`. |
+| 1.1 | 2026-11-15 | `422efbb` (PR #6 review) | @kmood-Sakura | **Edit** opens with the latest values; a `401` from any admin action ends the session; `staffIds` above INT4 are `400` (`C-20`). Verified by `TEST-23`, `TEST-25`. |

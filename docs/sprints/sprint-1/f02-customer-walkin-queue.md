@@ -3,7 +3,7 @@
 **Feature ID:** `F-02`  
 **Owning Requirements:** `FR-03`, `FR-04`, `FR-05`, `BR-01`, `BR-02`, `BR-03`, `BR-05`, `BR-06`, `BR-07`, `BR-09`, `NFR-03`, `NFR-05`, `NFR-06`  
 **Dependencies:** `F-01` (session, roles, categories). Needs migration `002_queue_tickets`.  
-**Contract Version:** 1.2 (see section 9)  
+**Contract Version:** 1.3 (see section 9)  
 
 ---
 
@@ -186,3 +186,4 @@ Unauthenticated requests receive `401` on every endpoint above.
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: join, track, self-cancel; `AC-04`-`AC-09`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Join transaction with category row lock and unique index, `seq_no` ordering, customer-only join, accepted boundaries and `CALLED` cancel in `AC-07`/`AC-08`, `AC-16` concurrency, data, rules, failure cases, permissions, UI (`C-03`, `C-05`, `C-08`, `C-09`). |
 | 1.2 | 2026-11-15 | issue #3 (`F-04` contract commit) | @kmood-Sakura | Tickets add `estWaitMins` while `WAITING` (`C-19`); paused counters keep serving their queue (`BR-12`, `F-04`). Verified by `TEST-04`. |
+| 1.3 | 2026-11-15 | `422efbb` (PR #6 review) | @kmood-Sakura | A refused cancel (e.g. `409` after staff called the ticket) shows the server message in the banner; `categoryId` above INT4 is `400`, not `500` (`C-20`). Verified by `TEST-13`, `TEST-07`. |

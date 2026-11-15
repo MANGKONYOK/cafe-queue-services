@@ -34,7 +34,17 @@ The matrix below maps every Sprint 1 Acceptance Criteria (`AC-01` to `AC-20`) an
 
 **Manual check `MC-01` (`NFR-03`):** sign in and join a queue, restart the server process, then reuse the same cookie: `GET /api/auth/me` returns `200` and the ticket is still listed. Repeated across a container restart in Lab 5.
 
-### 1.1 Planned Test Files
+### 1.1 Cases Added by the PR #6 Review (`C-20`)
+| Test | Added case |
+| :--- | :--- |
+| `TEST-07` | `categoryId` 999999999999 -> `400`, nothing stored |
+| `TEST-13` | A refused cancel (`409`) shows the server message |
+| `TEST-14` | Clicking the open counter tab keeps the list |
+| `TEST-17` | `?categoryId=&status=` -> `200` (not given); `categoryId` above INT4 -> `400` |
+| `TEST-23` | `staffIds` above INT4 -> `400`, assignments unchanged |
+| `TEST-25` | New counter appears on `/staff` without a reload; **Edit** shows the latest values; `401` -> sign-in |
+
+### 1.2 Planned Test Files
 | Tests | File |
 | :--- | :--- |
 | `TEST-01`, `TEST-02`, `TEST-15` | `server/tests/auth.test.ts` |
