@@ -59,6 +59,22 @@ describe("TEST-14 / AC-10, NFR-05: staff counter console (component, mocked API)
     expect(calls).toContain("POST /tickets/10/complete");
   });
 
+  it("loads the other counter's queue as soon as its tab is chosen", async () => {
+    const calls = fakeApi({
+      "GET /auth/me": () => ({ body: { user: barista } }),
+      "GET /categories": () => ({ body: { categories } }),
+      "GET /tickets": (_b, url) => ({
+        body: { tickets: url.searchParams.get("categoryId") === "2" ? [ticket({ id: 20, ticketCode: "EB-001", categoryId: 2 })] : [] },
+      }),
+    });
+    renderStaff();
+    expect(await screen.findByText("No guests waiting")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: /^EB/ }));
+    expect(await screen.findByRole("listitem", { name: "Ticket EB-001" }, { timeout: 1500 })).toBeInTheDocument();
+    expect(screen.getByLabelText("Waiting count")).toHaveTextContent("1");
+    expect(calls.filter((c) => c === "GET /tickets")).toHaveLength(2);
+  });
+
   it("disables Call next and shows the empty state when nobody is waiting", async () => {
     fakeApi({
       "GET /auth/me": () => ({ body: { user: barista } }),

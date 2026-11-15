@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ACTIVE, api, ApiError, type Category, type Ticket, type TicketStatus } from "../api";
 import { useAuth } from "../auth";
 import { AppShell } from "../components/AppShell";
@@ -55,6 +55,11 @@ export function StaffPage() {
     }
   }, [categories, tab, user, fail]);
   usePolling(load);
+  // Switching counters fetches that counter's queue at once instead of waiting for the next poll.
+  useEffect(() => {
+    if (tab !== null) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const act = async (path: string, body: unknown = {}) => {
     setBusy(true);
