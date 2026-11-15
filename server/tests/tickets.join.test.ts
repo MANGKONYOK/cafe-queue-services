@@ -25,7 +25,7 @@ describe("TEST-04 / AC-04, BR-07: customer joins an open queue and tracks the po
 
     expect(res.status).toBe(201);
     expect(res.body.ticket).toMatchObject({
-      ticketCode: "SB-001", status: "WAITING", aheadCount: 0, categoryId: SB, partySize: 2, specialRequests: "Pour-Over",
+      ticketCode: "SB-001", status: "WAITING", aheadCount: 0, estWaitMins: 0, categoryId: SB, partySize: 2, specialRequests: "Pour-Over",
     });
     expect(res.body.ticket.categoryName).toMatch(/Slow Bar/);
 
@@ -52,7 +52,9 @@ describe("TEST-04 / AC-04, BR-07: customer joins an open queue and tracks the po
     const second = await h.post("/api/tickets").send({ categoryId: SB, partySize: 3, customerId: first.body.ticket.customerId });
 
     expect(second.status).toBe(201);
-    expect(second.body.ticket).toMatchObject({ ticketCode: "SB-002", aheadCount: 1 });
+    expect(second.body.ticket).toMatchObject({ ticketCode: "SB-002", aheadCount: 1, estWaitMins: 12 }); // 1 ahead x 12 min (C-19)
+    const cats = (await h.get("/api/categories")).body.categories;
+    expect(cats.find((c: { id: number }) => c.id === SB).waitingCount).toBe(2);
     expect(second.body.ticket.customerId).not.toBe(first.body.ticket.customerId);
     expect((await h.get("/api/tickets/my")).body.tickets.map((t: { ticketCode: string }) => t.ticketCode)).toEqual(["SB-002"]);
   });
