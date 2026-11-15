@@ -235,9 +235,9 @@ All application errors return standard HTTP error status codes with an `error` e
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/health` | Public | None | `200 OK` `{"status":"ok"}` | - |
 | `GET` | `/api/ready` | Public | None | `200 OK` `{"status":"ready","db":"connected"}` | `503 Service Unavailable` if database ping fails |
-| `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` + Session Cookie | `400` Missing fields, `401` Invalid credentials |
+| `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) + Session Cookie | `400` Missing fields, `401` Invalid credentials |
 | `POST` | `/api/auth/logout` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"status":"logged_out"}`; session row deleted, cookie cleared | `401` Unauthenticated |
-| `GET` | `/api/auth/me` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"user":{id,email,fullName,role}}` | `401` Unauthenticated |
+| `GET` | `/api/auth/me` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) | `401` Unauthenticated |
 | `GET` | `/api/categories` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"categories":[...]}` | `401` Unauthenticated |
 | `POST` | `/api/tickets` | `CUSTOMER` | `{"categoryId":1,"partySize":2,"specialRequests":"V60 Drip"}` | `201 Created` `{"ticket":{...}}` | `400` Invalid party size / length (`BR-03`), `401` Unauth, `403` `STAFF`/`ADMIN` (`BR-09`), `404` Unknown category, `409` Active ticket exists (`BR-01`), `409` Category paused (`BR-02`) |
 | `GET` | `/api/tickets/my` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"tickets":[...]}` (caller's own tickets with `aheadCount`) | `401` Unauthenticated |

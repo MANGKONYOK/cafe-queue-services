@@ -3,7 +3,7 @@
 **Feature ID:** `F-01`  
 **Owning Requirements:** `FR-01`, `FR-02`, `BR-02`, `NFR-01`, `NFR-02`, `NFR-03`, `NFR-04`  
 **Dependencies:** None (first feature). Needs migration `001_auth_and_categories` and the seed.  
-**Contract Version:** 1.1 (see section 9)  
+**Contract Version:** 1.2 (see section 9)  
 
 ---
 
@@ -37,6 +37,7 @@ Feature `F-01` establishes the foundational security, identity and service disco
 - `GET /api/auth/me`
   - Headers: Cookie `connect.sid=...`
   - Success `200 OK`: `{ "user": { "id": 3, "email": "boom@omkoi.coffee", "fullName": "Boom", "role": "CUSTOMER" } }`
+  - For `STAFF` and `ADMIN`, login and `/me` also return `assignedCategoryIds` (the counters they may operate, `BR-09`; `ADMIN`: every counter), e.g. `{ "user": { "id": 2, "email": "barista@omkoi.coffee", "fullName": "Khun Noble", "role": "STAFF", "assignedCategoryIds": [1, 2] } }`. Customer responses are unchanged.
   - Error `401 Unauthorized`: `{ "error": { "code": "UNAUTHORIZED", "message": "Authentication required." } }`
 - `POST /api/auth/logout`
   - Success `200 OK`: `{ "status": "logged_out" }`; the `user_sessions` row is deleted and `Set-Cookie` clears `connect.sid`
@@ -147,3 +148,4 @@ Feature `F-01` establishes the foundational security, identity and service disco
 | :--- | :--- | :--- | :--- | :--- |
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: login, me, logout, categories, health/ready; `AC-01`-`AC-03`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Added `AC-13` logout and expiry, cookie and session rules, data, rules, failure cases, permissions, UI; removed the literal seed password (`C-04`, `C-05`, `C-15`). |
+| 1.2 | 2026-11-15 | issue #3 (F-03) | @kmood-Sakura | Login and `/me` return `assignedCategoryIds` for `STAFF`/`ADMIN` so the console shows the right counter tabs, as suggested in the PR #4 review (`C-17`). Verified by `TEST-16`. |
