@@ -1,13 +1,13 @@
-# Omkoi Station (สถานีอมก๋อย) — Cafe Queue & Services
+# Omkoi Station (สถานีอมก๋อย) - Cafe Queue & Services
 
-CPE 334 group project, Theme 9 Queue and Service Management. Walk-in guests join a counter's queue and follow their turn; baristas call the next guest, serve and close tickets. Design documents live in [`docs/`](docs/) (SRS, features, traceability, system SDS, sprint plan and Sprint 1 contracts).
+CPE 334 group project, Theme 9 Queue and Service Management. Walk-in guests join a counter's queue and follow their turn baristas call the next guest, serve and close tickets. Design documents live in [`docs/`](docs/) (SRS, features, traceability, system SDS, sprint plan and Sprint 1 contracts).
 
 | Part | Stack |
 | --- | --- |
 | `client/` | React 18, Vite, TypeScript, Tailwind CSS 4, React Router |
 | `server/` | Node.js 20+, Express 4, TypeScript, `express-session` + `connect-pg-simple`, `bcryptjs`, `zod` |
 | Database | PostgreSQL 16, numbered SQL migrations (`node-pg-migrate`), idempotent seed |
-| Tests | Vitest + Supertest against a real PostgreSQL test database; Vitest + Testing Library for the client |
+| Tests | Vitest + Supertest against PostgreSQL; Vitest + Testing Library for the client; Playwright for responsive E2E |
 
 ## 1. Prerequisites
 
@@ -39,7 +39,7 @@ cp server/.env.example server/.env
 
 ```bash
 npm run db:up                      # PostgreSQL 16 on localhost:$DB_PORT (dev + test databases), all settings from server/.env
-npm run install:all                # npm ci in server/ and client/
+npm run install:all                # npm ci in server/, client/ and e2e/
 npm run db:migrate                 # apply server/db/migrations
 npm run db:seed                    # 5 accounts, 4 counters (safe to re-run)
 ```
@@ -101,6 +101,23 @@ Test IDs (`TEST-xx`) in the test names match `docs/sprints/sprint-1/sts-and-dod.
 
 Errors use one envelope: `{ "error": { "code", "message", "details" } }`. Full contracts: [`docs/system-sds.md`](docs/system-sds.md) section 3.
 
-## 7. Workflow
+## 7. Documentation & Sprint Scope Summary
+
+Design contracts and specifications live in [`docs/`](docs/):
+
+| Document | Scope & Key Contents |
+| --- | --- |
+| [`docs/srs.md`](docs/srs.md) | Domain context (4 counters: `SB`, `EB`, `DL`, `RC`), actors (`CUSTOMER`, `STAFF`, `ADMIN`), scope/exclusions, `FR-01`..`FR-10`, `BR-01`..`BR-12`, `NFR-01`..`NFR-06`, architectural decisions, assumptions and open questions (`Q-01`..`Q-05`). |
+| [`docs/features.md`](docs/features.md) | Feature catalog (`F-01`..`F-08`) across Sprints 1-3 and dependency graph. |
+| [`docs/system-sds.md`](docs/system-sds.md) | 3-tier architecture (React 18/Vite + Express/Node 20 + PostgreSQL 16), ER model, migrations `001`-`003`, idempotent seed, UI/API contracts, RBAC security matrix, 8 h session lifecycle and Cloud Run delivery plan. |
+| [`docs/sprints/plan.md`](docs/sprints/plan.md) | Three-sprint roadmap, Lab 5 container/CI/GCP plan and risk mitigations. |
+| [`docs/sprints/sprint-1/f01-auth-and-categories.md`](docs/sprints/sprint-1/f01-auth-and-categories.md) | `F-01` contract: login, `/me`, logout, service directory with `waitingCount` (`AC-01`..`AC-03`, `AC-13`). |
+| [`docs/sprints/sprint-1/f02-customer-walkin-queue.md`](docs/sprints/sprint-1/f02-customer-walkin-queue.md) | `F-02` contract: join transaction, `aheadCount` + `estWaitMins`, customer cancel while `WAITING` (`AC-04`..`AC-09`, `AC-16`). |
+| [`docs/sprints/sprint-1/f03-staff-counter-lifecycle.md`](docs/sprints/sprint-1/f03-staff-counter-lifecycle.md) | `F-03` contract: assigned counter tabs, FIFO `call-next`, `serve`, `complete`, `no-show`, `cancel` (`AC-10`..`AC-12`, `AC-14`..`AC-15`). |
+| [`docs/sprints/sprint-1/f04-admin-counters.md`](docs/sprints/sprint-1/f04-admin-counters.md) | `F-04` contract (moved into Sprint 1 via `C-18`): create/edit/pause counters and manage `staff_counters` (`AC-17`..`AC-20`). |
+| [`docs/sprints/sprint-1/sts-and-dod.md`](docs/sprints/sprint-1/sts-and-dod.md) | Test matrix (`TEST-01`..`TEST-25`, `MC-01`), Red->Green TDD plan and Sprint 1 Definition of Done checklist. |
+| [`docs/traceability.md`](docs/traceability.md) | Master `FR`/`BR`/`NFR` -> `Feature` -> `AC` -> `TEST` matrix, coverage gaps and approved changes (`C-01`..`C-20`). |
+
+## 8. Workflow
 
 `main` ← `staging` ← `feature/*` / `docs/*`. Each issue gets a branch from `staging`, a PR into `staging` reviewed by the other member, and the release PR `staging → main` is tagged.
