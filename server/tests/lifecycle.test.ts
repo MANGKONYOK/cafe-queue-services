@@ -162,3 +162,16 @@ describe("TEST-17 / AC-15, BR-10: call-next takes the oldest WAITING ticket", ()
     expect((await barista.get(`/api/tickets?status=LOST`)).status).toBe(400);
   });
 });
+
+describe("TEST-17 (PR #6 review): queue list query parameters", () => {
+  it("treats empty ?categoryId=&status= as omitted and rejects a categoryId above INT4 with 400", async () => {
+    await join(await as("boom@omkoi.coffee", "customer"), SB);
+    const barista = await as("barista@omkoi.coffee", "staff");
+    const empty = await barista.get("/api/tickets?categoryId=&status=");
+    expect(empty.status).toBe(200);
+    expect(empty.body.tickets.map((t: { ticketCode: string }) => t.ticketCode)).toEqual(["SB-001"]);
+    const big = await barista.get("/api/tickets?categoryId=999999999999");
+    expect(big.status).toBe(400);
+    expect(big.body.error.details.fields).toHaveProperty("categoryId");
+  });
+});

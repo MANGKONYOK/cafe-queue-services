@@ -99,3 +99,23 @@ describe("TEST-14 / AC-10, NFR-05: staff counter console (component, mocked API)
     expect(await screen.findByRole("alert")).toHaveTextContent("You are not allowed to do this.");
   });
 });
+
+describe("TEST-14 (PR #6 review): counter tabs", () => {
+  it("keeps the queue on screen when the already-open tab is clicked again", async () => {
+    fakeApi({
+      "GET /auth/me": () => ({ body: { user: barista } }),
+      "GET /categories": () => ({ body: { categories } }),
+      "GET /tickets": (_b, url) => ({
+        body: { tickets: url.searchParams.get("categoryId") === "2" ? [ticket({ id: 20, ticketCode: "EB-001", categoryId: 2 })] : [] },
+      }),
+    });
+    renderStaff();
+    await screen.findByText("No guests waiting");
+    await userEvent.click(screen.getByRole("tab", { name: /^EB/ })); // chosen by a click: tab state is now EB
+    await screen.findByRole("listitem", { name: "Ticket EB-001" });
+    await userEvent.click(screen.getByRole("tab", { name: /^EB/ })); // the same tab again
+    expect(screen.getByRole("listitem", { name: "Ticket EB-001" })).toBeInTheDocument();
+    expect(screen.queryByText("Loading…")).toBeNull();
+    expect(screen.getByLabelText("Waiting count")).toHaveTextContent("1");
+  });
+});

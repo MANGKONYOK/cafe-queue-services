@@ -100,3 +100,22 @@ describe("TEST-13 / AC-04, NFR-05: customer queue portal (component, mocked API)
     expect(screen.getByText("CANCELLED")).toBeInTheDocument();
   });
 });
+
+describe("TEST-13 (PR #6 review): refused cancel", () => {
+  it("shows the server's 409 message when the cancel is refused", async () => {
+    fakeApi({
+      "GET /auth/me": () => ({ body: { user: boom } }),
+      "GET /categories": () => ({ body: { categories } }),
+      "GET /tickets/my": () => ({ body: { tickets: [ticket()] } }),
+      "POST /tickets/10/cancel": () => ({
+        status: 409,
+        body: { error: { code: "INVALID_STATE_TRANSITION", message: "A CALLED ticket cannot become CANCELLED.", details: {} } },
+      }),
+    });
+    renderQueue();
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel ticket" }));
+    await userEvent.type(within(screen.getByRole("dialog")).getByLabelText("Reason"), "Need to leave");
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel ticket" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("A CALLED ticket cannot become CANCELLED.");
+  });
+});

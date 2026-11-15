@@ -84,3 +84,73 @@ describe("TEST-25 / AC-17, AC-18, NFR-05: admin counters page (component, mocked
     expect(screen.queryByRole("link", { name: "Counters" })).toBeNull();
   });
 });
+
+describe("TEST-25 (PR #6 review): admin page freshness and session", () => {
+  it("shows a counter created on /admin as a tab on the console without a reload", async () => {
+    let cats = seedCategories.map((c) => ({ ...c }));
+    let me = { ...admin };
+    fakeApi({
+      "GET /auth/me": () => ({ body: { user: me } }),
+      "GET /categories": () => ({ body: { categories: cats } }),
+      "GET /staff": () => ({ body: { staff: staffList } }),
+      "GET /tickets": () => ({ body: { tickets: [] } }),
+      "POST /categories": (body) => {
+        const created = { id: 5, code: body.code, name: body.name, prefix: body.prefix, description: null, estMinsPerTicket: body.estMinsPerTicket, isOpen: true, waitingCount: 0 };
+        cats = [...cats, created];
+        me = { ...me, assignedCategoryIds: [1, 2, 3, 4, 5] };
+        return { status: 201, body: { category: created } };
+      },
+    });
+    renderAdmin();
+    const form = await screen.findByRole("form", { name: "New counter" });
+    await userEvent.type(within(form).getByLabelText(/Code/), "TEA_BAR");
+    await userEvent.type(within(form).getByLabelText(/Prefix/), "TB");
+    await userEvent.type(within(form).getByLabelText("Counter name"), "Highland Tea Bar");
+    await userEvent.click(within(form).getByRole("button", { name: "Create counter" }));
+    await screen.findByRole("article", { name: "Counter TB" });
+
+    await userEvent.click(screen.getByRole("link", { name: "Console" }));
+    expect(await screen.findByRole("tab", { name: /^TB/ })).toBeInTheDocument();
+  });
+
+  it("opens Edit with the latest values after the page refreshed", async () => {
+    let cats = seedCategories.map((c) => ({ ...c }));
+    fakeApi({
+      "GET /auth/me": () => ({ body: { user: admin } }),
+      "GET /categories": () => ({ body: { categories: cats } }),
+      "GET /staff": () => ({ body: { staff: staffList } }),
+      "PATCH /categories/1": (body) => {
+        cats = cats.map((c) => (c.id === 1 ? { ...c, ...body } : c));
+        return { body: { category: cats[0] } };
+      },
+    });
+    renderAdmin();
+    const sb = await screen.findByRole("article", { name: "Counter SB" });
+    await userEvent.click(within(sb).getByRole("button", { name: "Edit" }));
+    await userEvent.click(within(sb).getByRole("button", { name: "Close" }));
+
+    cats = cats.map((c) => (c.id === 1 ? { ...c, name: "Slow Bar (renamed elsewhere)", estMinsPerTicket: 20 } : c));
+    await userEvent.click(within(sb).getByRole("button", { name: "Pause" })); // triggers a reload
+    await within(sb).findByText("PAUSED");
+    await userEvent.click(within(sb).getByRole("button", { name: "Edit" }));
+    expect(within(sb).getByLabelText("Name")).toHaveValue("Slow Bar (renamed elsewhere)");
+    expect(within(sb).getByLabelText("Minutes per guest")).toHaveValue("20");
+  });
+
+  it("sends the admin to sign in when an action answers 401", async () => {
+    let signedIn = true;
+    fakeApi({
+      "GET /auth/me": () => (signedIn ? { body: { user: admin } } : { status: 401, body: { error: { code: "UNAUTHORIZED", message: "Authentication required.", details: {} } } }),
+      "GET /categories": () => ({ body: { categories: seedCategories } }),
+      "GET /staff": () => ({ body: { staff: staffList } }),
+      "PATCH /categories/1": () => {
+        signedIn = false;
+        return { status: 401, body: { error: { code: "UNAUTHORIZED", message: "Authentication required.", details: {} } } };
+      },
+    });
+    renderAdmin();
+    const sb = await screen.findByRole("article", { name: "Counter SB" });
+    await userEvent.click(within(sb).getByRole("button", { name: "Pause" }));
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+});

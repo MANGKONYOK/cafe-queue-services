@@ -175,3 +175,13 @@ describe("TEST-24 / AC-20: only the admin manages counters", () => {
     expect(await staffOf(SB)).toEqual(before);
   });
 });
+
+describe("TEST-23 (PR #6 review) / BR-09: staff ids outside INT4", () => {
+  it("rejects a staff id above 2147483647 with 400 and keeps the assignments", async () => {
+    const before = await staffOf(SB);
+    const res = await (await admin()).put(`/api/categories/${SB}/staff`).send({ staffIds: [999999999999] });
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.fields).toHaveProperty("staffIds");
+    expect(await staffOf(SB)).toEqual(before);
+  });
+});

@@ -185,3 +185,13 @@ describe("TEST-08 / AC-08, BR-05, BR-06: customer self-cancellation", () => {
     expect((await ticketRow(pool, t.id)).status).toBe("CALLED");
   });
 });
+
+describe("TEST-07 (PR #6 review) / BR-03: integers outside PostgreSQL INT4 are a 400, not a 500", () => {
+  it("rejects categoryId and partySize above 2147483647 with 400 VALIDATION_ERROR", async () => {
+    const a = await boom();
+    const big = await a.post("/api/tickets").send({ categoryId: 999999999999, partySize: 2 });
+    expect(big.status).toBe(400);
+    expect(big.body.error.details.fields).toHaveProperty("categoryId");
+    expect(await ticketCount()).toBe(0);
+  });
+});
