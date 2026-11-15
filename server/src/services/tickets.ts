@@ -14,7 +14,7 @@ export const invalidTransition = (from: string, to: string) =>
   new AppError(409, "INVALID_STATE_TRANSITION", `A ${from} ticket cannot become ${to}.`, { from, to });
 
 const SELECT_TICKET = `
-  SELECT t.*, c.name AS category_name, c.code AS category_code, u.full_name AS customer_name,
+  SELECT t.*, c.name AS category_name, c.code AS category_code, c.est_mins_per_ticket, u.full_name AS customer_name,
          CASE WHEN t.status = 'WAITING' THEN (
            SELECT count(*)::int FROM queue_tickets w
            WHERE w.category_id = t.category_id AND w.status = 'WAITING' AND w.seq_no < t.seq_no
@@ -54,6 +54,8 @@ export const toTicket = (r: Record<string, any>) => ({
   cancelledAt: r.cancelled_at,
   noShowAt: r.no_show_at,
   aheadCount: r.ahead_count ?? null,
+  // C-19: expected wait until this guest's turn starts; null once no longer WAITING.
+  estWaitMins: r.ahead_count == null ? null : r.ahead_count * r.est_mins_per_ticket,
 });
 
 export async function findTicket(db: Db, id: number) {

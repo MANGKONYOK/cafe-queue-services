@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from "./errors.js";
 import { authRouter } from "./routes/auth.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { healthRouter } from "./routes/health.js";
+import { staffRouter } from "./routes/staff.js";
 import { ticketsRouter } from "./routes/tickets.js";
 import { sessionMiddleware } from "./session.js";
 
@@ -28,6 +29,7 @@ export function createApp({ config, pool, clientDist }: AppOptions) {
   app.use("/api/auth", authRouter(config, pool));
   app.use("/api/categories", categoriesRouter(pool));
   app.use("/api/tickets", ticketsRouter(pool));
+  app.use("/api/staff", staffRouter(pool));
   app.use("/api", notFoundHandler);
 
   if (clientDist && fs.existsSync(path.join(clientDist, "index.html"))) {
