@@ -1,0 +1,21 @@
+{
+  "name": "omkoi-station",
+  "version": "1.3.4",
+  "private": true,
+  "description": "Omkoi Station queue and service management (CPE 334 Theme 9). Root scripts delegate to server/ and client/.",
+  "scripts": {
+    "install:all": "npm --prefix server ci && npm --prefix client ci && npm --prefix e2e ci",
+    "db:up": "docker compose --env-file server/.env up -d db",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:seed": "npm --prefix server run db:seed",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "test:server": "npm --prefix server test",
+    "test:client": "npm --prefix client test",
+    "check:secrets": "bash scripts/check-secrets.sh",
+    "e2e": "npm --prefix e2e test",
+    "test:all": "npm run test:server && npm run test:client && npm run e2e"
+  }
+}

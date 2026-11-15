@@ -1,0 +1,4 @@
+# Normalise text files to LF in the repository.
+* text=auto
+# Shell scripts must keep LF so bash runs them on every OS (scripts/check-secrets.sh).
+*.sh text eol=lf
