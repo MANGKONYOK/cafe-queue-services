@@ -31,14 +31,14 @@ cp server/.env.example server/.env
 | `SESSION_SECRET` | Random string (`openssl rand -hex 32`); in `production` the server refuses to start unless it is at least 32 characters |
 | `SEED_ADMIN_PASSWORD`, `SEED_STAFF_PASSWORD`, `SEED_CUSTOMER_PASSWORD` | Passwords for the seeded accounts; `db:seed` refuses to run without them |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credentials for the local Docker database (`docker-compose.yml` reads them from `server/.env`); must match `DATABASE_URL` |
+| `DB_PORT` | Host port of the local Docker database (`5432` if empty); use another, e.g. `5434`, when 5432 is taken, and the same port in both URLs |
 
 `server/.env` is ignored by Git. Never commit real values; `npm run check:secrets` scans the tracked files.
 
 ## 3. Database
 
 ```bash
-npm run db:up                      # PostgreSQL 16 on localhost:5432 (dev + test databases), credentials from server/.env
-# DB_PORT=5434 npm run db:up       # if 5432 is taken; then use :5434 in server/.env
+npm run db:up                      # PostgreSQL 16 on localhost:$DB_PORT (dev + test databases), all settings from server/.env
 npm run install:all                # npm ci in server/ and client/
 npm run db:migrate                 # apply server/db/migrations
 npm run db:seed                    # 5 accounts, 4 counters (safe to re-run)
@@ -48,9 +48,9 @@ Seeded accounts (passwords are the `SEED_*` values from your `server/.env`; test
 
 | Email | Role | Notes |
 | --- | --- | --- |
-| `admin@omkoi.coffee` | `ADMIN` | Station manager, every counter |
-| `barista@omkoi.coffee` | `STAFF` | Slow Bar and Espresso Bar (assignments arrive with F-03) |
-| `dessert@omkoi.coffee` | `STAFF` | Dessert Lounge (assignments arrive with F-03) |
+| `admin@omkoi.coffee` | `ADMIN` | Station manager: every counter, plus **Counters** (`/admin`) to create, edit, pause/resume counters and assign staff |
+| `barista@omkoi.coffee` | `STAFF` | Assigned to Slow Bar and Espresso Bar |
+| `dessert@omkoi.coffee` | `STAFF` | Assigned to Dessert Lounge |
 | `boom@omkoi.coffee`, `hongtae@omkoi.coffee` | `CUSTOMER` | Guests |
 
 Counters: `SLOW_BAR` (SB), `ESPRESSO_BAR` (EB), `DESSERT_LOUNGE` (DL), `ROASTERY_CONSULT` (RC, seeded paused).
@@ -69,13 +69,16 @@ Production-style: `npm run build`, then `NODE_ENV=production npm --prefix server
 ```bash
 npm run test:server    # API + DB integration tests (needs the database from step 3)
 npm run test:client    # component tests (jsdom)
+npm run e2e            # Playwright: journey (TEST-19) at 375/768/1280 px + admin counters at 1280 px, in your installed Google Chrome;
+                       # builds the client, resets + seeds the TEST database, serves on :3100
+npm run test:all       # all three
 npm run typecheck
 npm run check:secrets
 ```
 
 Test IDs (`TEST-xx`) in the test names match `docs/sprints/sprint-1/sts-and-dod.md`.
 
-## 6. API (Sprint 1 so far)
+## 6. API (Sprint 1)
 
 | Method | Path | Access |
 | --- | --- | --- |
@@ -83,7 +86,18 @@ Test IDs (`TEST-xx`) in the test names match `docs/sprints/sprint-1/sts-and-dod.
 | `POST` | `/api/auth/login` | Public |
 | `GET` | `/api/auth/me` | Signed in |
 | `POST` | `/api/auth/logout` | Signed in |
-| `GET` | `/api/categories` | Signed in |
+| `GET` | `/api/categories` | Signed in (each counter with `waitingCount`) |
+| `POST` | `/api/categories` | Admin: create a counter (`code`, `prefix`, `name`, `estMinsPerTicket`, optional `description`, `isOpen`) |
+| `PATCH` | `/api/categories/:id` | Admin: edit name, description, minutes, or pause/resume with `isOpen` |
+| `PUT` | `/api/categories/:id/staff` | Admin: set the staff on a counter (`staffIds`) |
+| `GET` | `/api/staff` | Admin: staff accounts and their counters |
+| `POST` | `/api/tickets` | Customer: join a counter (`categoryId`, `partySize` 1-8, optional `specialRequests`) |
+| `GET` | `/api/tickets/my` | Signed in: own tickets with `aheadCount` and `estWaitMins` |
+| `GET` | `/api/tickets/:id` | Owner customer; staff on that counter; admin |
+| `POST` | `/api/tickets/:id/cancel` | Owner while `WAITING`; staff on that counter while `WAITING`/`CALLED`; admin |
+| `GET` | `/api/tickets?categoryId=&status=` | Staff (assigned counters), admin |
+| `POST` | `/api/categories/:id/call-next` | Staff on that counter, admin: calls the oldest `WAITING` ticket |
+| `POST` | `/api/tickets/:id/serve`, `/complete`, `/no-show` | Staff on that counter, admin |
 
 Errors use one envelope: `{ "error": { "code", "message", "details" } }`. Full contracts: [`docs/system-sds.md`](docs/system-sds.md) section 3.
 

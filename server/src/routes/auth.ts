@@ -5,6 +5,7 @@ import type { Config } from "../config.js";
 import type { Pool } from "../db/pool.js";
 import { AppError, asyncHandler, validationError } from "../errors.js";
 import { requireAuth, toAuthUser } from "../middleware/auth.js";
+import { publicUser } from "../services/access.js";
 import { SESSION_COOKIE, clearCookieOptions } from "../session.js";
 
 const loginBody = z.object({
@@ -49,13 +50,17 @@ export function authRouter(config: Config, pool: Pool) {
       req.session.userId = row.id;
       req.session.loginAt = Date.now();
       await save(req);
-      res.json({ user: toAuthUser(row) });
+      res.json({ user: await publicUser(pool, toAuthUser(row)) });
     }),
   );
 
-  router.get("/me", requireAuth(pool), (req, res) => {
-    res.json({ user: req.user });
-  });
+  router.get(
+    "/me",
+    requireAuth(pool),
+    asyncHandler(async (req, res) => {
+      res.json({ user: await publicUser(pool, req.user!) });
+    }),
+  );
 
   router.post(
     "/logout",

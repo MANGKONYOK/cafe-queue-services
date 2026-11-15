@@ -11,13 +11,12 @@ gantt
     section Sprint 1
     Baseline & Contracts (Issue #1)     :done, 2026-11-08, 2026-11-09
     F-01 Auth, Sessions & RBAC (Issue #2):active, 2026-11-09, 2026-11-12
-    F-02 & F-03 Queue Lifecycle (Issue #3):2026-11-12, 2026-11-15
+    F-02, F-03 & F-04 Queue Lifecycle + Admin (Issue #3):2026-11-12, 2026-11-15
     Deliverable 1 Submission & Release Tag:milestone, 2026-11-15, 0d
     section Lab 5
     Docker, CI/CD & Cloud Run Delivery   :2026-11-13, 2026-11-15
     section Sprint 2
-    F-04 Category Admin & Pause/Resume   :2026-11-16, 2026-11-20
-    F-05 Beverage Itemization on Tickets :2026-11-20, 2026-11-25
+    F-05 Beverage Itemization on Tickets :2026-11-16, 2026-11-25
     F-06 Audit Log & Recall Tracking     :2026-11-25, 2026-11-29
     Deliverable 2 Submission & Lab 6 UAT :milestone, 2026-11-29, 0d
     section Sprint 3
@@ -39,12 +38,14 @@ gantt
   - **`F-01`:** Authentication, PostgreSQL Session Persistence (`connect-pg-simple`), RBAC Middleware and Read-Only Service Category Directory.
   - **`F-02`:** Customer Walk-In Queue Joining (`partySize` 1-8), Sequential Code Issuance (`SB-001`), Live `aheadCount` Tracking and Customer Self-Cancellation (`WAITING` only).
   - **`F-03`:** Barista Counter Operational Console scoped to assigned counters, server-side **Call next** (oldest first) and Lifecycle Execution (`WAITING -> CALLED -> SERVING -> COMPLETED / NO_SHOW / CANCELLED`) with mandatory summaries.
-- **Dependencies:** Initial project scaffolding, PostgreSQL 16 schema migrations (`001`-`003`) and idempotent seed script; `F-02` and `F-03` depend on `F-01` sessions and roles, and `F-03` on tickets from `F-02`.
-- **Why this scope:** It is the smallest slice that meets every Deliverable 1 requirement and the Theme 9 Sprint 1 example: real login/logout and current-user identity (`F-01`), a customer journey with unique numbering, duplicate prevention and a paused-counter rule (`F-02`), and an operator who calls the next eligible entry on authorized queues only and moves it through a validated state machine (`F-03`). Counter administration, items, audit views, ratings and analytics extend this slice without changing its rules, so they wait for Sprints 2 and 3.
+  - **`F-04`:** Admin Service Counter Management (create and edit counters, pause or resume intake, assign staff), moved from Sprint 2 (`C-18`).
+- **Delivery:** three PRs into `staging`: Issue #1 baseline (PR #4), Issue #2 `F-01` (PR #5), Issue #3 `F-02` + `F-03` + `F-04` (PR #6); then the release PR `staging -> main`.
+- **Dependencies:** Initial project scaffolding, PostgreSQL 16 schema migrations (`001`-`003`) and idempotent seed script; `F-02` and `F-03` depend on `F-01` sessions and roles, `F-03` on tickets from `F-02`, and `F-04` on `F-01` and the `staff_counters` table of `F-03`.
+- **Why this scope:** It is the smallest slice that meets every Deliverable 1 requirement and the Theme 9 Sprint 1 example: real login/logout and current-user identity (`F-01`), a customer journey with unique numbering, duplicate prevention and a paused-counter rule (`F-02`), and an operator who calls the next eligible entry on authorized queues only and moves it through a validated state machine (`F-03`). Counter administration (`F-04`) was pulled in because it reuses tables Sprint 1 already has and lets the release demonstrate pausing (`BR-02`) and staff scope (`BR-09`) from the UI. Items, audit views, ratings and analytics extend this slice without changing its rules, so they wait for Sprints 2 and 3.
 - **Completion Outcome & Evidence:**
-  - Verified against Acceptance Criteria `AC-01` through `AC-16` and test suite `TEST-01` through `TEST-20` (including the end-to-end journey `TEST-19`), run on the release commit.
+  - Verified against Acceptance Criteria `AC-01` through `AC-20` and test suite `TEST-01` through `TEST-25` (including the end-to-end journey `TEST-19`), run on the release commit.
   - Captioned program demonstration screenshots covering normal domain journey, business-rule `409` rejection and `403` forbidden RBAC rejection.
-  - Two reviewed PRs merged into `staging` and promoted to `main` with release tag `v1.0.0-sprint1`.
+  - Three reviewed PRs merged into `staging` and promoted to `main` with release tag `v1.0.0-sprint1`.
 
 ---
 
@@ -60,14 +61,12 @@ gantt
 ### Sprint 2: Operational Expansion & Menu Itemization
 - **Milestone Deadline:** Sunday, 29 November 2026, 23:59
 - **Target Deliverables:** Project Deliverable 2
-- **Sprint Goal:** Enable dynamic service counter administration, attach Omkoi signature beverage/dessert items to tickets and record an immutable transition audit trail for cross-team user acceptance testing.
+- **Sprint Goal:** Attach Omkoi signature beverage/dessert items to tickets and expose the immutable transition audit trail for cross-team user acceptance testing (counter administration moved to Sprint 1).
 - **Included Features:**
-  - **`F-04`:** Admin Service Counter Management (Admin CRUD on service categories, editing preparation durations, toggling `is_open` to pause or resume intake, and assigning staff to counters).
   - **`F-05`:** Highland Beverage & Pastry Itemization on Tickets (Attaching menu items, temperature/roast preferences and generating ticket itemization summaries).
   - **`F-06`:** Ticket Audit Trail View (`GET /api/tickets/:id/events` over the `ticket_events` rows written since Sprint 1) and Barista Customer Recall Tracking (Timestamping multiple call attempts before marking `NO_SHOW`).
 - **Dependencies:** Sprint 1 core ticket state machine and database models.
 - **Completion Outcome & Evidence:**
-  - Full Admin category control verified with non-admin rejection (`403`).
   - Itemized tickets verified in UI and database.
   - Defect management logs and bug fixes from Lab 6 Cross-Team UAT incorporated into `docs/sprints/sprint-2/`.
 

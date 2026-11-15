@@ -3,7 +3,7 @@
 **Feature ID:** `F-02`  
 **Owning Requirements:** `FR-03`, `FR-04`, `FR-05`, `BR-01`, `BR-02`, `BR-03`, `BR-05`, `BR-06`, `BR-07`, `BR-09`, `NFR-03`, `NFR-05`, `NFR-06`  
 **Dependencies:** `F-01` (session, roles, categories). Needs migration `002_queue_tickets`.  
-**Contract Version:** 1.1 (see section 9)  
+**Contract Version:** 1.3 (see section 9)  
 
 ---
 
@@ -56,7 +56,8 @@ Feature `F-02` delivers the customer-facing core of Omkoi Station, enabling walk
         "specialRequests": "Omkoi Mae Tuen Washed Pour-Over",
         "status": "WAITING",
         "createdAt": "2026-11-09T10:00:00Z",
-        "aheadCount": 0
+        "aheadCount": 0,
+        "estWaitMins": 0
       }
     }
     ```
@@ -93,7 +94,7 @@ Feature `F-02` delivers the customer-facing core of Omkoi Station, enabling walk
 - The category must be open (`BR-02`); the customer must have no `WAITING`/`CALLED`/`SERVING` ticket in it (`BR-01`); both hold under concurrent requests (`NFR-06`).
 - Codes are `<PREFIX>-<NNN>` from `next_seq`, never reset or reused; after `999` they grow to four digits (`BR-07`).
 - Self-cancel: owner only (`BR-06`), status `WAITING` only, `cancelReason` 3-200 characters after trimming (`BR-05`).
-- `aheadCount` = `WAITING` tickets in the same category with a lower `seq_no`; shown only while `WAITING`.
+- `aheadCount` = `WAITING` tickets in the same category with a lower `seq_no`; `estWaitMins` = `aheadCount` x the counter's `estMinsPerTicket`. Both are `null` once the ticket is no longer `WAITING`.
 
 ## 4. Failure & Boundary Cases
 | Case | Result |
@@ -184,3 +185,5 @@ Unauthenticated requests receive `401` on every endpoint above.
 | :--- | :--- | :--- | :--- | :--- |
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: join, track, self-cancel; `AC-04`-`AC-09`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Join transaction with category row lock and unique index, `seq_no` ordering, customer-only join, accepted boundaries and `CALLED` cancel in `AC-07`/`AC-08`, `AC-16` concurrency, data, rules, failure cases, permissions, UI (`C-03`, `C-05`, `C-08`, `C-09`). |
+| 1.2 | 2026-11-15 | issue #3 (`F-04` contract commit) | @kmood-Sakura | Tickets add `estWaitMins` while `WAITING` (`C-19`); paused counters keep serving their queue (`BR-12`, `F-04`). Verified by `TEST-04`. |
+| 1.3 | 2026-11-15 | `422efbb` (PR #6 review) | @kmood-Sakura | A refused cancel (e.g. `409` after staff called the ticket) shows the server message in the banner; `categoryId` above INT4 is `400`, not `500` (`C-20`). Verified by `TEST-13`, `TEST-07`. |

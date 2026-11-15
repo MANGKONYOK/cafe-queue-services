@@ -1,6 +1,6 @@
 # Local PostgreSQL 16 for development and tests (the app container arrives in Lab 5).
-# POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB come from server/.env (never committed).
-#   docker compose up -d db          # DB_PORT=5434 docker compose up -d db  if 5432 is taken
+# POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB and DB_PORT come from server/.env (never committed).
+#   npm run db:up   (= docker compose --env-file server/.env up -d db)
 services:
   db:
     image: postgres:16-alpine

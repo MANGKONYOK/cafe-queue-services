@@ -3,7 +3,7 @@
 **Feature ID:** `F-03`  
 **Owning Requirements:** `FR-06`, `FR-07`, `BR-04`, `BR-05`, `BR-06`, `BR-09`, `BR-10`, `NFR-03`, `NFR-05`, `NFR-06`  
 **Dependencies:** `F-01` (session, roles), `F-02` (tickets). Needs migration `003_staff_counters` and the staff assignments in the seed.  
-**Contract Version:** 1.1 (see section 9)  
+**Contract Version:** 1.3 (see section 9)  
 
 ---
 
@@ -81,7 +81,7 @@ Every transition is a conditional `UPDATE ... WHERE id = $1 AND status = <expect
 | `serve`, `complete`, `no-show`, staff `cancel` | `403` | Assigned counters | All |
 
 ## 6. UI Specification
-- **`/staff`:** one tab per assigned counter; each tab shows waiting count, **Call next** (disabled when no ticket is waiting), and the list oldest first with status badges.
+- **`/staff`:** one tab per assigned counter (from `assignedCategoryIds` on `/api/auth/me`, `F-01` 1.2); choosing a tab loads its queue at once; each tab shows waiting count, **Call next** (disabled when no ticket is waiting), and the list oldest first with status badges.
 - **Row actions:** `CALLED` -> **Start serving**, **No-show**, **Cancel**; `SERVING` -> **Complete**. Buttons are disabled while their request is pending.
 - **Dialogs:** Complete (summary 5-500), No-show (note 3-200), Cancel (reason 3-200), each with a character counter and field error.
 - **States:** loading skeleton; empty "No guests waiting"; `403`/`409` banners show the server message and refresh the list; the console refreshes every 10 seconds and after each action.
@@ -133,3 +133,5 @@ Every transition is a conditional `UPDATE ... WHERE id = $1 AND status = <expect
 | :--- | :--- | :--- | :--- | :--- |
 | 1.0 | 2026-11-09 | `a9c7a02` | @MANGKONYOK | First contract: staff console and lifecycle; `AC-10`-`AC-12`. |
 | 1.1 | 2026-11-14 | PR #4 review commit | @kmood-Sakura | Server-side call-next (`BR-10`) replaces `/:id/call`; staff counter scope (`BR-09`) with `staff_counters`; conditional-update transitions; staff cancel in `AC-12`; `AC-14`, `AC-15`; data, rules, failure cases, permissions, UI (`C-01`, `C-02`, `C-05`). |
+| 1.2 | 2026-11-15 | issue #3 (F-03) | @kmood-Sakura | Tabs come from `assignedCategoryIds` (`C-17`); a tab change loads that queue immediately (found by `TEST-19`). |
+| 1.3 | 2026-11-15 | `422efbb` (PR #6 review) | @kmood-Sakura | Clicking the open tab keeps the list; every refresh re-reads counters and `/api/auth/me`, so new counters and assignment changes appear without a reload; empty `?categoryId=&status=` means "not given" and a `categoryId` above INT4 is `400` (`C-20`). Verified by `TEST-14`, `TEST-17`, `TEST-25`. |

@@ -10,7 +10,7 @@ if (!url) {
 const pool = createPool(url);
 try {
   await seed(pool, seedPasswordsFromEnv());
-  console.log("Seeded 5 accounts and 4 service categories.");
+  console.log("Seeded 5 accounts, 4 service categories and 3 staff assignments.");
 } catch (err) {
   console.error(err instanceof SeedError ? err.message : err);
   process.exitCode = 1;

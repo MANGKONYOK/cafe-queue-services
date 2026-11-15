@@ -25,8 +25,9 @@ describe("TEST-03 / AC-03: service category directory", () => {
     expect(cats.map((c: { code: string }) => c.code)).toEqual(["SLOW_BAR", "ESPRESSO_BAR", "DESSERT_LOUNGE", "ROASTERY_CONSULT"]);
     expect(cats.map((c: { prefix: string }) => c.prefix)).toEqual(["SB", "EB", "DL", "RC"]);
     for (const c of cats) {
-      expect(Object.keys(c).sort()).toEqual(["code", "description", "estMinsPerTicket", "id", "isOpen", "name", "prefix"]);
+      expect(Object.keys(c).sort()).toEqual(["code", "description", "estMinsPerTicket", "id", "isOpen", "name", "prefix", "waitingCount"]);
       expect(c.estMinsPerTicket).toBeGreaterThan(0);
+      expect(c.waitingCount).toBe(0); // C-19: fresh seed, nobody waiting
     }
     expect(cats.find((c: { code: string }) => c.code === "ROASTERY_CONSULT").isOpen).toBe(false);
     expect(cats.filter((c: { isOpen: boolean }) => c.isOpen)).toHaveLength(3);

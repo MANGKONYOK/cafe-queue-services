@@ -65,6 +65,7 @@ describe("Login page and route guard (F-01 UI)", () => {
         { id: 1, code: "SLOW_BAR", name: "Omkoi Specialty Slow Bar", prefix: "SB", description: null, estMinsPerTicket: 12, isOpen: true },
         { id: 4, code: "ROASTERY_CONSULT", name: "Omkoi Roastery", prefix: "RC", description: null, estMinsPerTicket: 20, isOpen: false },
       ] } }],
+      "/tickets/my": [{ status: 200, body: { tickets: [] } }],
       "/auth/logout": [{ status: 200, body: { status: "logged_out" } }],
     });
     renderAt("/login");

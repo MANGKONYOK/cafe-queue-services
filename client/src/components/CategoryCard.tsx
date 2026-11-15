@@ -18,7 +18,7 @@ export function CategoryCard({ category, children }: { category: Category; child
       </div>
       {category.description && <p className="text-sm text-ink/75">{category.description}</p>}
       <p className="text-xs text-walnut/70">
-        Prefix <span className="font-mono">{category.prefix}</span> · about {category.estMinsPerTicket} min per guest
+        Prefix <span className="font-mono">{category.prefix}</span> · {category.waitingCount} waiting · about {category.estMinsPerTicket} min per guest
       </p>
       {children}
     </article>

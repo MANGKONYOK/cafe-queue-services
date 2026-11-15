@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
@@ -14,7 +15,20 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <p className="text-lg font-semibold tracking-wide">Omkoi Station</p>
             <p className="text-xs text-mist/70">สถานีอมก๋อย · {title}</p>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {user?.role === "ADMIN" && (
+              <nav aria-label="Admin" className="flex gap-1">
+                {[["/staff", "Console"], ["/admin", "Counters"]].map(([to, label]) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) => `rounded-md px-3 py-1.5 ${isActive ? "bg-walnut-dark text-mist" : "text-mist/80 hover:bg-walnut-dark"}`}
+                  >
+                    {label}
+                  </NavLink>
+                ))}
+              </nav>
+            )}
             <span>
               {user?.fullName} <span className="text-mist/60">({user?.role.toLowerCase()})</span>
             </span>

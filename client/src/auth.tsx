@@ -8,6 +8,8 @@ interface AuthState {
   logout: () => Promise<void>;
   /** Call when any request answers 401: the session is gone, so the guard sends the user to /login. */
   sessionEnded: () => void;
+  /** Re-reads /api/auth/me (role and assignedCategoryIds may have changed); null when signed out. */
+  refresh: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -40,7 +42,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sessionEnded = useCallback(() => setUser(null), []);
 
-  const value = useMemo(() => ({ user, loading, login, logout, sessionEnded }), [user, loading, login, logout, sessionEnded]);
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api<{ user: User }>("/auth/me");
+      setUser(r.user);
+      return r.user;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        setUser(null);
+        return null;
+      }
+      throw e;
+    }
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, login, logout, sessionEnded, refresh }),
+    [user, loading, login, logout, sessionEnded, refresh],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

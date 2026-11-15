@@ -205,6 +205,7 @@ ON CONFLICT (code) DO UPDATE SET
 | :--- | :--- | :--- | :--- | :--- |
 | Sign-In | `/login` | Public | Email/password form; safe `401` banner (no hint which field was wrong). | `POST /api/auth/login` |
 | Customer Queue Portal | `/queue` | `CUSTOMER` | Category cards (open/paused), join form, my tickets with status, `aheadCount` and a cancel dialog. | `GET /api/categories`, `POST /api/tickets`, `GET /api/tickets/my`, `POST /api/tickets/:id/cancel` |
+| Counter Admin | `/admin` | `ADMIN` | One card per counter: pause/resume, edit name/minutes/description, staff checkboxes; new-counter form (`F-04`). | `GET /api/categories`, `GET /api/staff`, `POST`/`PATCH /api/categories`, `PUT /api/categories/:id/staff` |
 | Barista Counter Console | `/staff` | `STAFF`, `ADMIN` | One tab per assigned counter (Admin: all), status filter, **Call next**, Start serving, Complete / No-show / Cancel dialogs. | `GET /api/tickets`, `POST /api/categories/:id/call-next`, transition endpoints |
 
 - **Navigation:** On load the client calls `GET /api/auth/me`. `401` redirects to `/login`; after login `CUSTOMER` lands on `/queue` and `STAFF`/`ADMIN` on `/staff`. A route of another role redirects to the user's home. The header shows the user's name and a **Sign out** button. Hidden routes are a convenience only; the API enforces every permission (section 4).
@@ -212,7 +213,7 @@ ON CONFLICT (code) DO UPDATE SET
 - **Empty:** "No active tickets - join a counter below" on `/queue`; "No guests waiting" per counter on `/staff`.
 - **Validation:** Forms validate on submit with the same limits as the API (`partySize` 1-8, notes 3-200 or 5-500 characters) and show the message under the field. API `400 details` are shown the same way.
 - **Errors:** `401` redirects to `/login`; `403`, `404` and `409` show the server's safe `message` in a banner and refresh the list; network or `5xx` errors show "Something went wrong - try again" without technical detail.
-- **Refresh:** `/queue` and `/staff` refresh every 10 seconds while the page is visible and after every action.
+- **Refresh:** `/queue`, `/staff` and `/admin` refresh every 10 seconds while the page is visible and after every action; `/staff` also re-reads the counters and `/api/auth/me`, so counters created or reassigned by the admin appear without a reload.
 - **Responsive:** No horizontal scroll at 375, 768 and 1280 px (`NFR-05`).
 
 ### 3.2 Standard API Envelope & Error Handling
@@ -235,10 +236,14 @@ All application errors return standard HTTP error status codes with an `error` e
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/health` | Public | None | `200 OK` `{"status":"ok"}` | - |
 | `GET` | `/api/ready` | Public | None | `200 OK` `{"status":"ready","db":"connected"}` | `503 Service Unavailable` if database ping fails |
-| `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` + Session Cookie | `400` Missing fields, `401` Invalid credentials |
+| `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) + Session Cookie | `400` Missing fields, `401` Invalid credentials |
 | `POST` | `/api/auth/logout` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"status":"logged_out"}`; session row deleted, cookie cleared | `401` Unauthenticated |
-| `GET` | `/api/auth/me` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"user":{id,email,fullName,role}}` | `401` Unauthenticated |
-| `GET` | `/api/categories` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"categories":[...]}` | `401` Unauthenticated |
+| `GET` | `/api/auth/me` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) | `401` Unauthenticated |
+| `GET` | `/api/categories` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"categories":[...]}` (each with `waitingCount`) | `401` Unauthenticated |
+| `POST` | `/api/categories` | `ADMIN` | `{"code","name","prefix","description","estMinsPerTicket","isOpen"}` | `201 Created` `{"category":{...}}` | `400` invalid (`BR-11`), `401`, `403`, `409` `DUPLICATE_CATEGORY` |
+| `PATCH` | `/api/categories/:id` | `ADMIN` | any of `{"name","description","estMinsPerTicket","isOpen"}` | `200 OK` `{"category":{...}}` | `400` (incl. `code`/`prefix`), `401`, `403`, `404` |
+| `PUT` | `/api/categories/:id/staff` | `ADMIN` | `{"staffIds":[2,3]}` | `200 OK` `{"categoryId","staffIds"}` | `400` non-`STAFF` id, `401`, `403`, `404` |
+| `GET` | `/api/staff` | `ADMIN` | None | `200 OK` `{"staff":[{id,fullName,email,categoryIds}]}` | `401`, `403` |
 | `POST` | `/api/tickets` | `CUSTOMER` | `{"categoryId":1,"partySize":2,"specialRequests":"V60 Drip"}` | `201 Created` `{"ticket":{...}}` | `400` Invalid party size / length (`BR-03`), `401` Unauth, `403` `STAFF`/`ADMIN` (`BR-09`), `404` Unknown category, `409` Active ticket exists (`BR-01`), `409` Category paused (`BR-02`) |
 | `GET` | `/api/tickets/my` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"tickets":[...]}` (caller's own tickets with `aheadCount`) | `401` Unauthenticated |
 | `GET` | `/api/tickets` | `STAFF` (assigned counters), `ADMIN` | Query: `?categoryId=&status=` | `200 OK` `{"tickets":[...]}` (ordered `seq_no ASC`; without `categoryId`, `STAFF` see only assigned counters) | `400` Invalid filter, `401` Unauth, `403` `CUSTOMER` role or unassigned `categoryId` (`BR-09`) |
@@ -250,6 +255,8 @@ All application errors return standard HTTP error status codes with an `error` e
 | `POST` | `/api/tickets/:id/no-show` | `STAFF` (assigned counter), `ADMIN` | `{"noShowNote":"Called 3x over 5 mins, no response"}` | `200 OK` `{"ticket":{...}}` | `400` Missing note (`BR-05`), `403` if `CUSTOMER` or unassigned counter, `404` Not found, `409` Not in `CALLED` state (`BR-04`) |
 
 Checks run in a fixed order so every endpoint refuses predictably: `401` session -> `403` role -> `403` ownership/counter scope -> `404` -> `400` body -> `409` rule. For a `CUSTOMER`, a ticket that is not theirs returns `403` whether or not it exists.
+
+Ids in paths, bodies and query strings must fit a PostgreSQL `INTEGER` (1 to 2147483647); anything else is `400 VALIDATION_ERROR` (or `404`/`403` for a path id), never a database error. An empty query value (`?categoryId=&status=`) counts as not given.
 
 ---
 
@@ -271,7 +278,7 @@ All authorization checks are enforced server-side inside Express middleware (`re
 | `POST /api/tickets/:id/serve` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST /api/tickets/:id/complete` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST /api/tickets/:id/no-show` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
-| `POST/PATCH/PUT /api/categories/*` incl. staff assignment (Sprint 2) | `401` | `403 Forbidden` | `403 Forbidden` | Allowed | `requireRole(['ADMIN'])` |
+| `POST/PATCH/PUT /api/categories/*` incl. staff assignment, `GET /api/staff` (`F-04`) | `401` | `403 Forbidden` | `403 Forbidden` | Allowed | `requireRole(['ADMIN'])` |
 
 ---
 
