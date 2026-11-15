@@ -20,6 +20,11 @@ if git grep -nIE '[a-z]+://[^/[:space:]:@`<]+:[^@[:space:]`<]+@' -- . "$self"; t
 # 5. Committed .env files (only .env.example is allowed).
 if git ls-files | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -vE '\.env\.example$'; then fail=1; fi
 
+# 6. The ignore rules must keep real env files and dependencies out of Git.
+for p in server/.env client/.env server/node_modules; do
+  if ! git check-ignore -q --no-index "$p"; then echo "$p is not ignored by .gitignore"; fail=1; fi
+done
+
 if [ "$fail" -ne 0 ]; then
   echo "check-secrets: possible secret committed (see lines above)" >&2
   exit 1

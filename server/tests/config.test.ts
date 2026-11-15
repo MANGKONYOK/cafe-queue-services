@@ -27,7 +27,8 @@ describe("TEST-20 / NFR-02: configuration from the environment, no committed sec
   it("exits the server process at startup in production without a secret", () => {
     const run = spawnSync(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: path.resolve(here, ".."),
-      env: { PATH: process.env.PATH, NODE_ENV: "production", DATABASE_URL: base.DATABASE_URL, SESSION_SECRET: "change-me" },
+      // Keep the full environment (Windows needs SystemRoot/TEMP for tsx's IPC pipe), override only what is tested.
+      env: { ...process.env, NODE_ENV: "production", DATABASE_URL: base.DATABASE_URL, SESSION_SECRET: "change-me" },
       encoding: "utf8",
       timeout: 15_000,
     });
@@ -43,7 +44,8 @@ describe("TEST-20 / NFR-02: configuration from the environment, no committed sec
   });
 
   it("finds no secret in the tracked files (scripts/check-secrets.sh)", () => {
-    const out = execFileSync("bash", [path.join(repoRoot, "scripts", "check-secrets.sh")], { cwd: repoRoot, encoding: "utf8" });
+    // A relative POSIX path: bash on Windows cannot run a "C:\\..." backslash path.
+    const out = execFileSync("bash", ["scripts/check-secrets.sh"], { cwd: repoRoot, encoding: "utf8" });
     expect(out).toMatch(/no secrets found/);
   });
 });
