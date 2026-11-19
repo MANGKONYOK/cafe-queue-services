@@ -1,20 +1,66 @@
-# Local PostgreSQL 16 for development and tests (the app container arrives in Lab 5).
-# POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB and DB_PORT come from server/.env (never committed).
-#   npm run db:up   (= docker compose --env-file server/.env up -d db)
+# Local PostgreSQL 16 + unified Omkoi Station container stack (Lab 5, R-01 / C-03).
+# Fill in server/.env (or root .env) from .env.example before running (never committed):
+#   npm run db:up                  -> starts PostgreSQL only (local dev & tests)
+#   docker compose up --build -d   -> builds & starts db + migrate + app on http://localhost:3000
 services:
   db:
     image: postgres:16-alpine
     env_file:
-      - server/.env
+      - path: .env
+        required: false
+      - path: server/.env
+        required: false
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - omkoi-db:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\""]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 3s
       retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+      - path: server/.env
+        required: false
+    environment:
+      COMPOSE_DB_HOST: db
+    command: ["sh", "-c", "npm run db:migrate && npm run db:seed:prod"]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+      - path: server/.env
+        required: false
+    environment:
+      # Local Compose runs over plain HTTP on localhost:3000, so keep NODE_ENV=development
+      # for non-Secure local cookies; the Dockerfile defaults to NODE_ENV=production for Cloud Run.
+      NODE_ENV: development
+      PORT: 3000
+      COMPOSE_DB_HOST: db
+    ports:
+      - "${PORT:-3000}:3000"
+
 volumes:
   omkoi-db:

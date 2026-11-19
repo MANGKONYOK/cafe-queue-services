@@ -18,14 +18,14 @@ This runbook documents the production architecture, Sprint 1 cloud-readiness bas
 1. **Stateless Container / Zero Local Disk Storage (`R-04`):** No `multer` disk uploads or in-memory state arrays exist. All application records and sessions persist in PostgreSQL 16 across container restarts and Cloud Run rollbacks.
 2. **Idempotent Natural-Key Seeding:** `server/src/db/seed.ts` uses `ON CONFLICT (email) DO UPDATE` for seeded users, `ON CONFLICT (code) DO UPDATE` for service categories (preserving admin-toggled `is_open` state on re-seed), and `ON CONFLICT DO NOTHING` for `staff_counters`. Production seeding executes compiled JS (`npm run db:seed:prod` -> `node dist/db/seed-cli.js`) reading `SEED_*_PASSWORD` variables strictly from the environment.
 3. **Production Fail-Fast & Proxy Trust:** `loadConfig()` in `server/src/config.ts` refuses to start when `NODE_ENV=production` unless `SESSION_SECRET` is at least 32 characters and not `"change-me"`. When `config.isProduction` is true, `server/src/app.ts` enables `app.set("trust proxy", 1)` for secure session cookies behind Cloud Run's TLS load balancer.
-4. **PostgreSQL-Backed User Sessions (`R-04`):** Express sessions use `connect-pg-simple` targeting table `user_sessions` (`cookie: omkoi.sid`, 8h non-rolling expiration).
+4. **PostgreSQL-Backed User Sessions (`R-04`):** Express sessions use `connect-pg-simple` targeting table `user_sessions` (`cookie: connect.sid`, 8h non-rolling expiration).
 5. **Environment-Driven Port & Same-Origin SPA Serving:** `server/src/index.ts` binds to `0.0.0.0` on `Number(process.env.PORT) || 3000` and passes `/app/client/dist` as `clientDist` to `createApp()`, serving API routes (`/api/*`) and built React assets from one Cloud Run container.
 6. **Health & DB Readiness Probes (`NFR-04`):** `GET /api/health` returns `200 {"status":"ok"}` and `GET /api/ready` runs `SELECT 1` against PostgreSQL, returning `200 {"status":"ready","db":"connected"}` or `503 {"status":"not_ready","db":"disconnected"}`.
 
 ### 1.3 Intentional Changes from `toktickit-lab5-starter` Reference Stack
 - **SQL Migrations instead of Prisma:** Omkoi Station uses pure `pg` with `node-pg-migrate` (`server/db/migrations/001`–`003`) via `npm run db:migrate` and compiled seeding via `npm run db:seed:prod` instead of Prisma (`openssl` and `prisma migrate deploy` are omitted from the Dockerfile).
 - **Explicit Session & Multi-Role Seed Secrets:** Unlike the starter kit's two password secrets, Omkoi Station enforces `SESSION_SECRET` (`omkoi-session-secret`) and three role seed passwords (`omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password`) stored individually in Google Secret Manager with per-secret least-privilege IAM bindings on `omkoi-queue-runner`.
-- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`omkoi.sid`) rather than bearer JWTs, so the planned `deploy/smoke_test.py` (Issues #11–#12) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
+- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`connect.sid`) rather than bearer JWTs, so the planned `deploy/smoke_test.py` (Issues #11–#12) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
 
 ---
 
@@ -39,7 +39,7 @@ Zero secrets are committed to Git. All `.env.example` files contain empty key na
 | `NODE_ENV` | No | Runtime mode (`development`, `test`, `production`) | `server/.env` (`development`) | Cloud Run env (`production`) |
 | `DATABASE_URL` | **Yes** | PostgreSQL 16 connection URI (TCP locally; Unix socket `/cloudsql/...` on Cloud Run) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue`) | Secret Manager (`omkoi-database-url:latest`) |
 | `TEST_DATABASE_URL` | **Yes** | Isolated test database URI for Vitest suites (`TEST-01`..`TEST-25`) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue_test`) | CI workflow service DB only (not needed in Cloud Run) |
-| `SESSION_SECRET` | **Yes** | Signs `omkoi.sid` cookies; must be >= 32 chars in `production` | `server/.env` | Secret Manager (`omkoi-session-secret:latest`) |
+| `SESSION_SECRET` | **Yes** | Signs `connect.sid` cookies; must be >= 32 chars in `production` | `server/.env` | Secret Manager (`omkoi-session-secret:latest`) |
 | `SEED_ADMIN_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for seeded `admin@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-admin-password:latest`) on migrate job |
 | `SEED_STAFF_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for `barista@omkoi.coffee` & `dessert@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-staff-password:latest`) on migrate job |
 | `SEED_CUSTOMER_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for `boom@omkoi.coffee` & `hongtae@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-customer-password:latest`) on migrate job |
@@ -81,12 +81,13 @@ From the repository root (`cafe-queue-services/`):
    npm run e2e
    npm run check:secrets
    ```
-6. **Build & run unified production Docker container locally *(planned — pending Issue #9 / `C-03`)*:**
-   > **Note:** Not executable yet on this branch — there is no `Dockerfile` yet and `docker-compose.yml` currently defines only the `db` service. The multi-stage `Dockerfile` and unified `app` Compose service arrive in **Issue #9**.
+6. **Build & run unified production Docker container locally (Issue #9 / `C-03`):**
+   > **Note:** The production `Dockerfile` defaults `NODE_ENV=production` (`Secure` cookies behind Cloud Run HTTPS). Local `docker-compose.yml` overrides `NODE_ENV=development` on the `app` service so `connect.sid` session cookies work over plain `http://localhost:3000`, and sets `COMPOSE_DB_HOST=db` so `docker-entrypoint.sh` routes `DATABASE_URL` to the Compose `db` container.
    ```bash
    docker compose up --build -d
    curl -s http://localhost:3000/api/health
    curl -s http://localhost:3000/api/ready
+   docker compose restart app
    ```
 
 ---
