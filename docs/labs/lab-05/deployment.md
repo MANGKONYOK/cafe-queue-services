@@ -25,19 +25,18 @@ This runbook documents the production architecture, Sprint 1 cloud-readiness bas
 ### 1.3 Intentional Changes from `toktickit-lab5-starter` Reference Stack
 - **SQL Migrations instead of Prisma:** Omkoi Station uses pure `pg` with `node-pg-migrate` (`server/db/migrations/001`–`003`) via `npm run db:migrate` and compiled seeding via `npm run db:seed:prod` instead of Prisma (`openssl` and `prisma migrate deploy` are omitted from the Dockerfile).
 - **Explicit Session & Multi-Role Seed Secrets:** Unlike the starter kit's two password secrets, Omkoi Station enforces `SESSION_SECRET` (`omkoi-session-secret`) and three role seed passwords (`omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password`) stored individually in Google Secret Manager with per-secret least-privilege IAM bindings on `omkoi-queue-runner`.
-- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`omkoi.sid`) rather than bearer JWTs, so `deploy/smoke_test.py` validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
+- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`omkoi.sid`) rather than bearer JWTs, so the planned `deploy/smoke_test.py` (Issues #11–#12) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
 
 ---
 
 ## 2. Environment Variables & Secrets Configuration (`R-02`)
 
-Zero secrets are committed to Git. All `.env.example` files contain empty key names only (`scripts/check-secrets.sh` / `TEST-20`). Local development uses `server/.env` (gitignored), CI uses ephemeral PostgreSQL service values inside `.github/workflows/ci-docker.yml`, and Cloud Run injects runtime secrets from Google Secret Manager.
+Zero secrets are committed to Git. All `.env.example` files contain empty key names only (`scripts/check-secrets.sh` / `TEST-20`). Local development uses `server/.env` (gitignored), CI will use ephemeral PostgreSQL service values inside `.github/workflows/ci-docker.yml` *(planned — Issue #10)*, and Cloud Run will inject runtime secrets from Google Secret Manager *(planned — Issues #11–#12)*.
 
 | Variable Name | Secret? | Purpose | Local Development Source | Production (GCP Cloud Run) Source |
 | :--- | :---: | :--- | :--- | :--- |
 | `PORT` | No | HTTP port listened on by Express (`0.0.0.0`) | `server/.env` (`3000`) | Cloud Run env (`3000`) |
 | `NODE_ENV` | No | Runtime mode (`development`, `test`, `production`) | `server/.env` (`development`) | Cloud Run env (`production`) |
-| `TZ` | No | Process timezone for logs and timestamps | Host / container (`Asia/Bangkok`) | Cloud Run env (`Asia/Bangkok`) |
 | `DATABASE_URL` | **Yes** | PostgreSQL 16 connection URI (TCP locally; Unix socket `/cloudsql/...` on Cloud Run) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue`) | Secret Manager (`omkoi-database-url:latest`) |
 | `TEST_DATABASE_URL` | **Yes** | Isolated test database URI for Vitest suites (`TEST-01`..`TEST-25`) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue_test`) | CI workflow service DB only (not needed in Cloud Run) |
 | `SESSION_SECRET` | **Yes** | Signs `omkoi.sid` cookies; must be >= 32 chars in `production` | `server/.env` | Secret Manager (`omkoi-session-secret:latest`) |
@@ -82,7 +81,8 @@ From the repository root (`cafe-queue-services/`):
    npm run e2e
    npm run check:secrets
    ```
-6. **Build & run unified production Docker container locally (Issue #2 / `C-03`):**
+6. **Build & run unified production Docker container locally *(planned — pending Issue #9 / `C-03`)*:**
+   > **Note:** Not executable yet on this branch — there is no `Dockerfile` yet and `docker-compose.yml` currently defines only the `db` service. The multi-stage `Dockerfile` and unified `app` Compose service arrive in **Issue #9**.
    ```bash
    docker compose up --build -d
    curl -s http://localhost:3000/api/health
@@ -91,9 +91,11 @@ From the repository root (`cafe-queue-services/`):
 
 ---
 
-## 4. GCP Project, Region & Resource Names
+## 4. GCP Project, Region & Resource Names *(Planned — Issues #10–#12)*
 
-All deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`) and GitHub Actions workflows reference these consistent identifiers:
+> **Status:** Planned for **Issues #10–#12**. None of the deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`, `deploy/smoke_test.py`), GitHub Actions workflows, or WIF/IAM bindings exist in this repository yet.
+
+All planned deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`) and GitHub Actions workflows will reference these consistent identifiers:
 
 | Resource | Identifier / Setting | Notes |
 | :--- | :--- | :--- |
@@ -110,20 +112,22 @@ All deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardow
 
 ---
 
-## 5. Repeatable Release, Running Commit Check & Rollback Procedure (`R-07`, `R-08`)
+## 5. Repeatable Release, Running Commit Check & Rollback Procedure (`R-07`, `R-08`) *(Planned — Issues #10–#12)*
 
-### 5.1 Standard Release Pipeline (`feature/* -> staging -> main`)
+> **Status:** Planned for **Issues #10–#12**. `.github/workflows/ci-docker.yml` and the `protect-main` ruleset are planned in **Issue #10**; `deploy/deploy.sh`, `deploy/release.sh`, `deploy/smoke_test.py`, WIF, and `.github/workflows/deploy.yml` are planned in **Issues #11–#12**.
+
+### 5.1 Standard Release Pipeline (`feature/* -> staging -> main`) *(Planned — Issues #10–#12)*
 1. Create a GitHub Issue labeled `lab5` on the 6-column Kanban board and branch off `staging`.
-2. Open a Pull Request into `staging`; verify `.github/workflows/ci-docker.yml` (`test-and-docker`) passes (`R-05`). Teammate reviews with specific technical comments and merges (`Author != Reviewer`, `R-09`).
-3. Open a **Release PR** from `staging` into `main`. GitHub ruleset `protect-main` (empty bypass list) requires 1 teammate approval and green `test-and-docker` before merge (`R-06`).
-4. Merging into `main` triggers `.github/workflows/deploy.yml` (`R-07`):
+2. Open a Pull Request into `staging`; verify `.github/workflows/ci-docker.yml` (`test-and-docker`, planned in Issue #10) passes (`R-05`). Teammate reviews with specific technical comments and merges (`Author != Reviewer`, `R-09`).
+3. Open a **Release PR** from `staging` into `main`. GitHub ruleset `protect-main` (empty bypass list, planned in Issue #10) requires 1 teammate approval and green `test-and-docker` before merge (`R-06`).
+4. Merging into `main` triggers `.github/workflows/deploy.yml` (planned in Issue #12, `R-07`):
    - Re-runs `test-and-docker`,
    - Authenticates to GCP via Workload Identity Federation (no JSON key files),
    - Builds and pushes image tagged with the 40-character `GITHUB_SHA`,
-   - Executes `deploy/release.sh` (resolves immutable `@sha256` digest -> updates and runs `omkoi-queue-migrate` -> updates `omkoi-queue` Cloud Run service and routes 100% traffic to latest),
+   - Executes `deploy/release.sh` (planned in Issues #11–#12: resolves immutable `@sha256` digest -> updates and runs `omkoi-queue-migrate` -> updates `omkoi-queue` Cloud Run service and routes 100% traffic to latest),
    - Runs `python3 deploy/smoke_test.py "$SERVICE_URL"`.
 
-### 5.2 Identifying Which Commit Is Running in Production (`R-08`)
+### 5.2 Identifying Which Commit Is Running in Production (`R-08`) *(Planned — Issues #11–#12)*
 Run either command in Cloud Shell / terminal (or inspect the **Revisions** tab in Google Cloud Console for `omkoi-queue` and the `Deploy demo` GitHub Actions job summary):
 ```bash
 gcloud run services describe omkoi-queue --region asia-southeast1 \
@@ -134,7 +138,7 @@ gcloud artifacts docker images describe \
 ```
 Match the active revision's `@sha256:...` digest to the commit tag `<40_CHAR_SHA>` in Artifact Registry / GitHub Actions step summary.
 
-### 5.3 Rollback & Roll-Forward Procedure (`C-05`)
+### 5.3 Rollback & Roll-Forward Procedure (`R-08`) *(Planned — Issue #12)*
 1. Find the full **40-character commit SHA** of the target prior release in GitHub (`main` history or previous `Deploy demo` run summary).
 2. In GitHub **Actions -> Deploy demo -> Run workflow**, paste that 40-char SHA into **`image_tag`** and click **Run workflow**.
 3. When `image_tag` is set, `deploy.yml` skips tests, image build, and migrations (`ROLLBACK=true`) and switches `omkoi-queue` directly to the previously built immutable `@sha256` digest. Because data and `user_sessions` reside in Cloud SQL, signed-in sessions and queue tickets persist across rollbacks.
