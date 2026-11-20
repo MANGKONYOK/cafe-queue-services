@@ -25,7 +25,7 @@ This runbook documents the production architecture, Sprint 1 cloud-readiness bas
 ### 1.3 Intentional Changes from `toktickit-lab5-starter` Reference Stack
 - **SQL Migrations instead of Prisma:** Omkoi Station uses pure `pg` with `node-pg-migrate` (`server/db/migrations/001`–`003`) via `npm run db:migrate` and compiled seeding via `npm run db:seed:prod` instead of Prisma (`openssl` and `prisma migrate deploy` are omitted from the Dockerfile).
 - **Explicit Session & Multi-Role Seed Secrets:** Unlike the starter kit's two password secrets, Omkoi Station enforces `SESSION_SECRET` (`omkoi-session-secret`) and three role seed passwords (`omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password`) stored individually in Google Secret Manager with per-secret least-privilege IAM bindings on `omkoi-queue-runner`.
-- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`connect.sid`) rather than bearer JWTs, so [`deploy/smoke_test.py`](../../deploy/smoke_test.py) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
+- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`connect.sid`) rather than bearer JWTs, so [`deploy/smoke_test.py`](../../../deploy/smoke_test.py) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
 
 ---
 
