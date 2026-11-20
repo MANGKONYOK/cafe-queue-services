@@ -252,7 +252,7 @@ run_cmd gcloud run deploy "$SERVICE_NAME" \
   --service-account "$SA_EMAIL" \
   --add-cloudsql-instances "$SQL_CONN_NAME" \
   --set-secrets "$APP_SECRETS" \
-  --set-env-vars "NODE_ENV=production,TZ=Asia/Bangkok" \
+  --set-env-vars "NODE_ENV=production,TZ=Asia/Bangkok,PG_POOL_MAX=5" \
   --min-instances 0 \
   --max-instances 3 \
   --memory 512Mi \

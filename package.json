@@ -6,6 +6,11 @@
   "scripts": {
     "install:all": "npm --prefix server ci && npm --prefix client ci && npm --prefix e2e ci",
     "db:up": "docker compose --env-file server/.env up -d db",
+    "stack:up": "docker compose --env-file server/.env up --build -d",
+    "stack:ps": "docker compose --env-file server/.env ps -a",
+    "stack:logs": "docker compose --env-file server/.env logs -f app",
+    "stack:restart": "docker compose --env-file server/.env restart app",
+    "stack:down": "docker compose --env-file server/.env down",
     "db:migrate": "npm --prefix server run db:migrate",
     "db:seed": "npm --prefix server run db:seed",
     "db:seed:prod": "npm --prefix server run db:seed:prod",
