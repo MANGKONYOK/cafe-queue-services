@@ -13,6 +13,8 @@ e2e
 coverage
 test-results
 playwright-report
+**/__pycache__
+*.pyc
 *.db
 *.sqlite
 gha-creds-*.json
