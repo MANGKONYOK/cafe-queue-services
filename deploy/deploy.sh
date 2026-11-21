@@ -155,7 +155,7 @@ run_cmd gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/cloudsql.client" \
   --condition=None \
-  --quiet
+  --format=none --quiet
 
 # 6. Create/sync DB user & DATABASE_URL secret in Secret Manager (only if missing)
 if [ "$DRY_RUN" = "1" ]; then
@@ -211,7 +211,7 @@ for secret in "${RUNTIME_SECRETS[@]}"; do
   run_cmd gcloud secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/secretmanager.secretAccessor" \
-    --project "$PROJECT_ID" --quiet
+    --project "$PROJECT_ID" --format=none --quiet
 done
 
 # 9. Build & push container image via Cloud Build

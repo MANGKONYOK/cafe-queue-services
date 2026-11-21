@@ -77,12 +77,12 @@ fi
 
 # 3. Least-privilege roles
 run_cmd gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${DEPLOYER_EMAIL}" --role="roles/run.developer" --condition=None --quiet
+  --member="serviceAccount:${DEPLOYER_EMAIL}" --role="roles/run.developer" --condition=None --format=none --quiet
 run_cmd gcloud artifacts repositories add-iam-policy-binding "$REPO_NAME" \
   --location "$REGION" --member="serviceAccount:${DEPLOYER_EMAIL}" \
-  --role="roles/artifactregistry.writer" --project "$PROJECT_ID" --quiet
+  --role="roles/artifactregistry.writer" --project "$PROJECT_ID" --format=none --quiet
 run_cmd gcloud iam service-accounts add-iam-policy-binding "$RUNNER_EMAIL" \
-  --member="serviceAccount:${DEPLOYER_EMAIL}" --role="roles/iam.serviceAccountUser" --project "$PROJECT_ID" --quiet
+  --member="serviceAccount:${DEPLOYER_EMAIL}" --role="roles/iam.serviceAccountUser" --project "$PROJECT_ID" --format=none --quiet
 
 # 4. Workload Identity pool and OIDC provider
 if ! exists gcloud iam workload-identity-pools describe "$POOL_ID" --location=global --project "$PROJECT_ID"; then
@@ -108,7 +108,7 @@ fi
 run_cmd gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_EMAIL" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/attribute.repository_id/${REPO_ID}" \
-  --project "$PROJECT_ID" --quiet
+  --project "$PROJECT_ID" --format=none --quiet
 
 # 6. The deployer must have no keys
 if [ "$DRY_RUN" != "1" ]; then
