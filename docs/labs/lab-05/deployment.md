@@ -105,6 +105,7 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 
 | Resource | Identifier / Setting | Notes |
 | :--- | :--- | :--- |
+| **GCP Project ID** | `omkoi-515303` | Passed as `GCP_PROJECT_ID` in GitHub `demo` Environment; not a secret |
 | **GCP Region** | `asia-southeast1` | Passed as `GCP_REGION` in GitHub `demo` Environment |
 | **Artifact Registry Repo** | `omkoi-queue` | Format: Docker (`asia-southeast1-docker.pkg.dev/<PROJECT_ID>/omkoi-queue/omkoi-queue`) |
 | **Cloud SQL Instance** | `omkoi-queue-db` | `POSTGRES_16`, `--edition=enterprise`, `--tier=db-f1-micro`, `--no-storage-auto-increase` |
