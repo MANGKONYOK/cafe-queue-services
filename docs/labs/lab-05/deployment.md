@@ -117,6 +117,8 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 | **Workload Identity Pool / Provider** | `github-actions` / `github-main` | Locked to `MANGKONYOK/cafe-queue-services`, `refs/heads/main`, `deploy.yml`, `environment:demo` |
 | **Secret Manager Secrets** | `omkoi-database-url`, `omkoi-session-secret`, `omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password` | Created idempotently by `deploy/deploy.sh` |
 
+**Keyless GitHub → GCP sign-in (Issue #11, Guide 6.2–6.3):** after the first `deploy/deploy.sh`, run `DRY_RUN=1 bash deploy/setup-wif.sh`, read the printed attribute condition and commands, then run `bash deploy/setup-wif.sh`. It creates `omkoi-queue-deployer` (no keys), grants only `roles/run.developer`, `roles/artifactregistry.writer` on `omkoi-queue` and `roles/iam.serviceAccountUser` on `omkoi-queue-runner`, creates the pool `github-actions` and provider `github-main` (repository `1450043053`, owner `183930344`, `refs/heads/main`, `deploy.yml`, environment `demo`), and prints the four `demo` environment variables. It is idempotent and checked offline by `deploy/tests/test_wif_stub.sh` in CI.
+
 ---
 
 ## 5. Repeatable Release, Running Commit Check & Rollback Procedure (`R-07`, `R-08`)
