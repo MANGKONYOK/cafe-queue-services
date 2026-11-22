@@ -40,7 +40,7 @@ describe("TEST-12 / NFR-04: health and readiness", () => {
     const health = await request(app).get("/api/health");
     expect(Date.now() - start).toBeLessThan(500);
     expect(health.status).toBe(200);
-    expect(health.body).toEqual({ status: "ok" });
+    expect(health.body).toEqual({ status: "ok", version: "dev" }); // C-06: APP_VERSION, "dev" when unset
 
     start = Date.now();
     const ready = await request(app).get("/api/ready");
