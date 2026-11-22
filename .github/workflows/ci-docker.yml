@@ -1,0 +1,93 @@
+# CI & Docker Build quality gate (Lab 5 - R-05, C-01)
+# Runs on every Pull Request to staging/main and can be called via workflow_call
+# by deploy.yml so deployments only proceed after all checks pass.
+
+name: CI & Docker Build
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job id must stay `test-and-docker` (required by protect-main branch ruleset).
+  test-and-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: omkoi_ci
+          POSTGRES_DB: omkoi_queue
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U omkoi_ci -d omkoi_queue"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Check deployment scripts without accessing GCP
+        run: |
+          bash -n deploy/deploy.sh deploy/release.sh deploy/teardown.sh deploy/setup-wif.sh scripts/check-secrets.sh
+          bash deploy/tests/test_deploy_stub.sh
+          bash deploy/tests/test_release_stub.sh
+          bash deploy/tests/test_wif_stub.sh
+          python3 -m unittest discover -s deploy/tests -p 'test_smoke.py'
+
+      - name: Check secret hygiene
+        run: bash scripts/check-secrets.sh
+
+      - name: Install, Migrate, Seed & Test Backend
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgresql://omkoi_ci@localhost:5432/omkoi_queue
+          TEST_DATABASE_URL: postgresql://omkoi_ci@localhost:5432/omkoi_queue_test
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+          npm run db:migrate
+          export SEED_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+          export SEED_STAFF_PASSWORD="$(openssl rand -hex 16)"
+          export SEED_CUSTOMER_PASSWORD="$(openssl rand -hex 16)"
+          npm run db:seed:prod
+          npm test
+
+      - name: Install, Typecheck, Test & Build Frontend
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Verify Unified Production Dockerfile Build
+        run: docker build -t omkoi-queue:ci .

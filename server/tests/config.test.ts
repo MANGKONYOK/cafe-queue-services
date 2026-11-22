@@ -24,6 +24,16 @@ describe("TEST-20 / NFR-02: configuration from the environment, no committed sec
     expect(loadConfig({ ...base, NODE_ENV: "development", SESSION_SECRET: "change-me" }).port).toBe(3000);
   });
 
+  it("reads the PostgreSQL pool size from PG_POOL_MAX, default 10 (deployment design D-1)", () => {
+    const dev = { ...base, NODE_ENV: "development", SESSION_SECRET: "s" };
+    expect(loadConfig(dev).poolMax).toBe(10);
+    expect(loadConfig({ ...dev, PG_POOL_MAX: "" }).poolMax).toBe(10);
+    expect(loadConfig({ ...dev, PG_POOL_MAX: "5" }).poolMax).toBe(5);
+    for (const bad of ["0", "-1", "2.5", "51", "five"]) {
+      expect(() => loadConfig({ ...dev, PG_POOL_MAX: bad })).toThrow(ConfigError);
+    }
+  });
+
   it("exits the server process at startup in production without a secret", () => {
     const run = spawnSync(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: path.resolve(here, ".."),
