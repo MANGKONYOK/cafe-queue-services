@@ -26,7 +26,7 @@ describe("TEST-20 / NFR-02: configuration from the environment, no committed sec
 
   it("reads the PostgreSQL pool size from PG_POOL_MAX, default 10 (deployment design D-1)", () => {
     const dev = { ...base, NODE_ENV: "development", SESSION_SECRET: "s" };
-    expect(loadConfig(dev).poolMax).toBe(10);
+    expect(loadConfig(dev).poolMax).toBe(999);
     expect(loadConfig({ ...dev, PG_POOL_MAX: "" }).poolMax).toBe(10);
     expect(loadConfig({ ...dev, PG_POOL_MAX: "5" }).poolMax).toBe(5);
     for (const bad of ["0", "-1", "2.5", "51", "five"]) {

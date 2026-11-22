@@ -46,12 +46,12 @@ npm run db:seed                    # 5 accounts, 4 counters (safe to re-run)
 
 Seeded accounts (passwords are the `SEED_*` values from your `server/.env`; test accounts for markers are shared privately, never in Git):
 
-| Email | Role | Notes |
-| --- | --- | --- |
-| `admin@omkoi.coffee` | `ADMIN` | Station manager: every counter, plus **Counters** (`/admin`) to create, edit, pause/resume counters and assign staff |
-| `barista@omkoi.coffee` | `STAFF` | Assigned to Slow Bar and Espresso Bar |
-| `dessert@omkoi.coffee` | `STAFF` | Assigned to Dessert Lounge |
-| `boom@omkoi.coffee`, `hongtae@omkoi.coffee` | `CUSTOMER` | Guests |
+| Email                                       | Role       | Notes                                                                                                                |
+| ------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| `admin@omkoi.coffee`                        | `ADMIN`    | Station manager: every counter, plus **Counters** (`/admin`) to create, edit, pause/resume counters and assign staff |
+| `barista@omkoi.coffee`                      | `STAFF`    | Assigned to Slow Bar and Espresso Bar                                                                                |
+| `dessert@omkoi.coffee`                      | `STAFF`    | Assigned to Dessert Lounge                                                                                           |
+| `boom@omkoi.coffee`, `hongtae@omkoi.coffee` | `CUSTOMER` | Guests                                                                                                               |
 
 Counters: `SLOW_BAR` (SB), `ESPRESSO_BAR` (EB), `DESSERT_LOUNGE` (DL), `ROASTERY_CONSULT` (RC, seeded paused).
 
