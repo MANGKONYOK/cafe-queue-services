@@ -9,7 +9,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 try {
   const config = loadConfig();
-  const pool = createPool(config.databaseUrl);
+  const pool = createPool(config.databaseUrl, config.poolMax);
   const clientDist = path.resolve(here, "..", "..", "client", "dist");
   const app = createApp({ config, pool, clientDist });
   app.listen(config.port, "0.0.0.0", () => {

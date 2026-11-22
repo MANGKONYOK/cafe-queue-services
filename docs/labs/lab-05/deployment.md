@@ -38,6 +38,7 @@ Zero secrets are committed to Git. All `.env.example` files contain empty key na
 | `PORT` | No | HTTP port listened on by Express (`0.0.0.0`) | `server/.env` (`3000`) | Cloud Run env (`3000`) |
 | `NODE_ENV` | No | Runtime mode (`development`, `test`, `production`) | `server/.env` (`development`) | Cloud Run env (`production`) |
 | `DATABASE_URL` | **Yes** | PostgreSQL 16 connection URI (TCP locally; Unix socket `/cloudsql/...` on Cloud Run) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue`) | Secret Manager (`omkoi-database-url:latest`) |
+| `PG_POOL_MAX` | No | PostgreSQL connections per process (1–50, default `10`). Cloud Run sets `5`, so 3 instances (15) plus the migrate job stay under `db-f1-micro`'s 25 connections | `server/.env` (empty = `10`) | Cloud Run env (`5`, set by `deploy/deploy.sh`) |
 | `TEST_DATABASE_URL` | **Yes** | Isolated test database URI for Vitest suites (`TEST-01`..`TEST-25`) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue_test`) | CI workflow service DB only (not needed in Cloud Run) |
 | `SESSION_SECRET` | **Yes** | Signs `connect.sid` cookies; must be >= 32 chars in `production` | `server/.env` | Secret Manager (`omkoi-session-secret:latest`) |
 | `SEED_ADMIN_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for seeded `admin@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-admin-password:latest`) on migrate job |
@@ -83,11 +84,15 @@ From the repository root (`cafe-queue-services/`):
    ```
 6. **Build & run unified production Docker container locally (Issue #9 / `C-03`):**
    > **Note:** The production `Dockerfile` defaults `NODE_ENV=production` (`Secure` cookies behind Cloud Run HTTPS). Local `docker-compose.yml` overrides `NODE_ENV=development` on the `app` service so `connect.sid` session cookies work over plain `http://localhost:3000`, and sets `COMPOSE_DB_HOST=db` so `docker-entrypoint.sh` routes `DATABASE_URL` to the Compose `db` container.
+   The root scripts always pass `--env-file server/.env`, so `DB_PORT` and `PORT` come from your env file (plain `docker compose up` falls back to host port `5432`, which may already be taken).
    ```bash
-   docker compose up --build -d
+   npm run stack:up       # build the image; start db, run migrate (db:migrate + db:seed:prod), then app
+   npm run stack:ps       # migrate: Exited (0); db: healthy; app: Up
    curl -s http://localhost:3000/api/health
    curl -s http://localhost:3000/api/ready
-   docker compose restart app
+   npm run stack:restart  # restart the app container; sessions and tickets stay in the omkoi-db volume
+   npm run stack:logs     # follow the app logs (Ctrl+C to stop following)
+   npm run stack:down     # stop and remove containers; the omkoi-db volume (data) is kept
    ```
 
 ---
@@ -100,6 +105,7 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 
 | Resource | Identifier / Setting | Notes |
 | :--- | :--- | :--- |
+| **GCP Project ID** | `omkoi-515303` | Passed as `GCP_PROJECT_ID` in GitHub `demo` Environment; not a secret |
 | **GCP Region** | `asia-southeast1` | Passed as `GCP_REGION` in GitHub `demo` Environment |
 | **Artifact Registry Repo** | `omkoi-queue` | Format: Docker (`asia-southeast1-docker.pkg.dev/<PROJECT_ID>/omkoi-queue/omkoi-queue`) |
 | **Cloud SQL Instance** | `omkoi-queue-db` | `POSTGRES_16`, `--edition=enterprise`, `--tier=db-f1-micro`, `--no-storage-auto-increase` |
@@ -110,6 +116,8 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 | **GitHub Deployer SA** | `omkoi-queue-deployer` | Authenticated keyless via WIF (`roles/run.developer`, repo-scoped `roles/artifactregistry.writer`, `roles/iam.serviceAccountUser`) |
 | **Workload Identity Pool / Provider** | `github-actions` / `github-main` | Locked to `MANGKONYOK/cafe-queue-services`, `refs/heads/main`, `deploy.yml`, `environment:demo` |
 | **Secret Manager Secrets** | `omkoi-database-url`, `omkoi-session-secret`, `omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password` | Created idempotently by `deploy/deploy.sh` |
+
+**Keyless GitHub → GCP sign-in (Issue #11, Guide 6.2–6.3):** after the first `deploy/deploy.sh`, run `DRY_RUN=1 bash deploy/setup-wif.sh`, read the printed attribute condition and commands, then run `bash deploy/setup-wif.sh`. It creates `omkoi-queue-deployer` (no keys), grants only `roles/run.developer`, `roles/artifactregistry.writer` on `omkoi-queue` and `roles/iam.serviceAccountUser` on `omkoi-queue-runner`, creates the pool `github-actions` and provider `github-main` (repository `1450043053`, owner `183930344`, `refs/heads/main`, `deploy.yml`, environment `demo`), and prints the four `demo` environment variables. It is idempotent and checked offline by `deploy/tests/test_wif_stub.sh` in CI.
 
 ---
 

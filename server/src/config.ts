@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_POOL_MAX } from "./db/pool.js";
 
 /** The value `.env.example` ships with; never acceptable in production (NFR-02). */
 export const PLACEHOLDER = "change-me";
@@ -8,6 +9,8 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1),
   SESSION_SECRET: z.string().min(1),
+  // Connections per process. Cloud Run sets 5 so 3 instances stay under db-f1-micro's 25 (deployment design D-1).
+  PG_POOL_MAX: z.coerce.number().int().min(1).max(50).default(DEFAULT_POOL_MAX),
 });
 
 export interface Config {
@@ -16,6 +19,7 @@ export interface Config {
   port: number;
   databaseUrl: string;
   sessionSecret: string;
+  poolMax: number;
 }
 
 export class ConfigError extends Error {}
@@ -40,5 +44,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: c.PORT,
     databaseUrl: c.DATABASE_URL,
     sessionSecret: c.SESSION_SECRET,
+    poolMax: c.PG_POOL_MAX,
   };
 }

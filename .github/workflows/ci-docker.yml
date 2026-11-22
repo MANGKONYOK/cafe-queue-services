@@ -56,9 +56,10 @@ jobs:
 
       - name: Check deployment scripts without accessing GCP
         run: |
-          bash -n deploy/deploy.sh deploy/release.sh deploy/teardown.sh scripts/check-secrets.sh
+          bash -n deploy/deploy.sh deploy/release.sh deploy/teardown.sh deploy/setup-wif.sh scripts/check-secrets.sh
           bash deploy/tests/test_deploy_stub.sh
           bash deploy/tests/test_release_stub.sh
+          bash deploy/tests/test_wif_stub.sh
           python3 -m unittest discover -s deploy/tests -p 'test_smoke.py'
 
       - name: Check secret hygiene
