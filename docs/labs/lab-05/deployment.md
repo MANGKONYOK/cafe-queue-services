@@ -97,9 +97,9 @@ From the repository root (`cafe-queue-services/`):
 
 ---
 
-## 4. GCP Project, Region & Resource Names *(Live Provisioning in Issues #11–#12)*
+## 4. GCP Project, Region & Resource Names
 
-> **Status:** `deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`, `deploy/smoke_test.py`, and `.github/workflows/ci-docker.yml` are implemented on this branch (**Issue #10**). Cloud SQL/Cloud Run provisioning (`deploy.sh`), WIF/IAM bindings, `protect-main`, and `.github/workflows/deploy.yml` run in **Issues #11–#12**.
+> **Status (22 Nov 2026):** all resources below are live (Issue #11). `.github/workflows/deploy.yml` is added in Issue #12 (Release A).
 
 Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`) and GitHub Actions workflows reference these consistent identifiers:
 
@@ -107,9 +107,9 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 | :--- | :--- | :--- |
 | **GCP Project ID** | `omkoi-515303` | Passed as `GCP_PROJECT_ID` in GitHub `demo` Environment; not a secret |
 | **GCP Region** | `asia-southeast1` | Passed as `GCP_REGION` in GitHub `demo` Environment |
-| **Artifact Registry Repo** | `omkoi-queue` | Format: Docker (`asia-southeast1-docker.pkg.dev/<PROJECT_ID>/omkoi-queue/omkoi-queue`) |
+| **Artifact Registry Repo** | `omkoi-queue` | Format: Docker (`asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue`) |
 | **Cloud SQL Instance** | `omkoi-queue-db` | `POSTGRES_16`, `--edition=enterprise`, `--tier=db-f1-micro`, `--no-storage-auto-increase` |
-| **Cloud SQL Database / User** | `omkoi_queue` / `omkoi_user` | Unix socket `/cloudsql/<PROJECT_ID>:asia-southeast1:omkoi-queue-db` |
+| **Cloud SQL Database / User** | `omkoi_queue` / `omkoi_user` | Unix socket `/cloudsql/omkoi-515303:asia-southeast1:omkoi-queue-db` |
 | **Cloud Run Service** | `omkoi-queue` | Public HTTPS (`--allow-unauthenticated`), port `3000`, `min-instances=0`, `max-instances=3`, `512Mi` |
 | **Cloud Run Migration Job** | `omkoi-queue-migrate` | Runs `npm run db:migrate && npm run db:seed:prod` before every service update |
 | **Runtime Service Account** | `omkoi-queue-runner` | Least-privilege IAM: `roles/cloudsql.client` + per-secret `roles/secretmanager.secretAccessor` |
@@ -119,11 +119,26 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
 
 **Keyless GitHub → GCP sign-in (Issue #11, Guide 6.2–6.3):** after the first `deploy/deploy.sh`, run `DRY_RUN=1 bash deploy/setup-wif.sh`, read the printed attribute condition and commands, then run `bash deploy/setup-wif.sh`. It creates `omkoi-queue-deployer` (no keys), grants only `roles/run.developer`, `roles/artifactregistry.writer` on `omkoi-queue` and `roles/iam.serviceAccountUser` on `omkoi-queue-runner`, creates the pool `github-actions` and provider `github-main` (repository `1450043053`, owner `183930344`, `refs/heads/main`, `deploy.yml`, environment `demo`), and prints the four `demo` environment variables. It is idempotent and checked offline by `deploy/tests/test_wif_stub.sh` in CI.
 
+
+### 4.1 First Deployment and Merge Gate (Issue #11)
+
+| Item | Result |
+| :--- | :--- |
+| Trial deploy | 21 Nov 2026, `bash deploy/deploy.sh` from `fix/11-pre-deploy` (image `:latest`, revision `omkoi-queue-00001-lrf`); not used as evidence |
+| Evidence deploy | 22 Nov 2026, `bash deploy/deploy.sh` from `main` at tag **`v2.3.0`** (`bd2f69e`, release PR #17), revision **`omkoi-queue-00002-pgw`** |
+| Public URL | https://omkoi-queue-tdt4pxa64a-as.a.run.app (same service: https://omkoi-queue-6605140384.asia-southeast1.run.app) |
+| Smoke test | `python3 deploy/smoke_test.py <URL>`: health, ready/DB, HTML, 401 on `/api/categories` all PASS |
+| Domain workflow (`C-04`) | customer joins SB (`SB-001`), staff calls, serves and completes it, admin sees every counter; signed-out `/api/tickets?categoryId=1` returns `401`, signed-in customer gets `403` |
+| WIF | `bash deploy/setup-wif.sh`: deployer `omkoi-queue-deployer` (no keys), pool `github-actions`, provider `github-main` ACTIVE |
+| GitHub environment | `demo`: deployment branch `main`, variables `GCP_PROJECT_ID`, `GCP_REGION`, `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT` |
+| Ruleset `protect-main` (`R-06`) | Active, empty bypass list, target `main`: restrict deletions, block force pushes, PR with 1 approval, required check `test-and-docker` |
+| Gate proof (`C-02`) | PR #18 from `test/prove-gate` (one intentionally failing assertion in `server/tests/config.test.ts`): `test-and-docker` failed, merge state **BLOCKED**, closed unmerged |
+
 ---
 
 ## 5. Repeatable Release, Running Commit Check & Rollback Procedure (`R-07`, `R-08`)
 
-> **Status:** `.github/workflows/ci-docker.yml` (`test-and-docker`) and `deploy/*` scripts are implemented (**Issue #10**). `protect-main`, WIF, live Cloud Shell provisioning, and `.github/workflows/deploy.yml` arrive in **Issues #11–#12**.
+> **Status:** `ci-docker.yml`, `deploy/*`, WIF, `demo` and `protect-main` are live (Issues #10–#11). `.github/workflows/deploy.yml` is added in Issue #12 (Release A, `v2.5.0`).
 
 ### 5.1 Standard Release Pipeline (`feature/* -> staging -> main`)
 1. Create a GitHub Issue labeled `lab5` on the 6-column Kanban board and branch off `staging`.
@@ -133,21 +148,23 @@ Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh
    - Re-runs `test-and-docker`,
    - Authenticates to GCP via Workload Identity Federation (no JSON key files),
    - Builds and pushes image tagged with the 40-character `GITHUB_SHA`,
-   - Executes `deploy/release.sh` (resolves immutable `@sha256` digest -> updates and runs `omkoi-queue-migrate` -> updates `omkoi-queue` Cloud Run service and routes 100% traffic to latest),
+   - Executes `deploy/release.sh` (resolves immutable `@sha256` digest -> updates and runs `omkoi-queue-migrate` -> updates `omkoi-queue` to that digest with `APP_VERSION=<40-char SHA>` and routes 100% traffic to latest),
    - Runs `python3 deploy/smoke_test.py "$SERVICE_URL"`.
 
-### 5.2 Identifying Which Commit Is Running in Production (`R-08`) *(Planned — Issues #11–#12)*
+### 5.2 Identifying Which Commit Is Running in Production (`R-08`)
 Run either command in Cloud Shell / terminal (or inspect the **Revisions** tab in Google Cloud Console for `omkoi-queue` and the `Deploy demo` GitHub Actions job summary):
 ```bash
 gcloud run services describe omkoi-queue --region asia-southeast1 \
   --format="value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)"
+gcloud run services describe omkoi-queue --region asia-southeast1 \
+  --format="yaml(spec.template.spec.containers[0].env)" | grep -A1 APP_VERSION
 gcloud artifacts docker images describe \
-  "asia-southeast1-docker.pkg.dev/<PROJECT_ID>/omkoi-queue/omkoi-queue:<40_CHAR_SHA>" \
+  "asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue:<40_CHAR_SHA>" \
   --format="value(image_summary.fully_qualified_digest)"
 ```
-Match the active revision's `@sha256:...` digest to the commit tag `<40_CHAR_SHA>` in Artifact Registry / GitHub Actions step summary.
+Match the active revision's `@sha256:...` digest to the commit tag `<40_CHAR_SHA>` in Artifact Registry and the `Deploy demo` run summary. Every pipeline release also sets `APP_VERSION` to that SHA on the revision (Release B shows it in the app).
 
-### 5.3 Rollback & Roll-Forward Procedure (`R-08`) *(Planned — Issue #12)*
+### 5.3 Rollback & Roll-Forward Procedure (`R-08`, `C-05`)
 1. Find the full **40-character commit SHA** of the target prior release in GitHub (`main` history or previous `Deploy demo` run summary).
 2. In GitHub **Actions -> Deploy demo -> Run workflow**, paste that 40-char SHA into **`image_tag`** and click **Run workflow**.
 3. When `image_tag` is set, `deploy.yml` skips tests, image build, and migrations (`ROLLBACK=true`) and switches `omkoi-queue` directly to the previously built immutable `@sha256` digest. Because data and `user_sessions` reside in Cloud SQL, signed-in sessions and queue tickets persist across rollbacks.
