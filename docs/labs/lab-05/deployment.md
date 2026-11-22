@@ -6,7 +6,7 @@ How Omkoi Station is configured, built, tested, deployed to Google Cloud and rel
 | :--- | :--- |
 | project | GCP `omkoi-515303`, region `asia-southeast1` |
 | live URL | https://omkoi-queue-tdt4pxa64a-as.a.run.app |
-| released | `v2.3.0` (`bd2f69e`) → Cloud Run revision `omkoi-queue-00002-pgw` |
+| released | `v2.5.0` (`1bdb094`, Release A) → Cloud Run revision `omkoi-queue-00003-5mk`, deployed by **Deploy demo** |
 | scripts | `deploy/deploy.sh` (first deploy) · `deploy/setup-wif.sh` (GitHub sign-in) · `deploy/release.sh` (every release) · `deploy/smoke_test.py` · `deploy/teardown.sh` |
 | workflows | `.github/workflows/ci-docker.yml` (job `test-and-docker`) · `.github/workflows/deploy.yml` (Issue #12) |
 
@@ -178,7 +178,7 @@ A rollback only changes which image Cloud Run runs. Data and signed-in sessions 
 | tag | release PR | contains | deployed by | revision |
 | :--- | :--- | :--- | :--- | :--- |
 | `v2.3.0` | #17 (`bd2f69e`) | cloud-ready, Docker, CI gate, deploy scripts, WIF script | `deploy/deploy.sh` by hand | `omkoi-queue-00002-pgw` |
-| `v2.5.0` | Release A (TODO PR, SHA) | `deploy.yml`, `APP_VERSION` in `release.sh` (#19) | first **Deploy demo** run | TODO |
+| `v2.5.0` | Release A: #20 (`1bdb094`) | `deploy.yml`, `APP_VERSION` in `release.sh` (#19) | first **Deploy demo** run [45037979858](https://github.com/MANGKONYOK/cafe-queue-services/actions/runs/45037979858) | `omkoi-queue-00003-5mk` (`APP_VERSION=1bdb094…`) |
 | `v2.6.0` | Release B (TODO PR, SHA) | release banner + `version` in `/api/health` | **Deploy demo** | TODO |
 
 Release A must reach `main` before Release B is merged into `staging`, so the two are separate releases: B shows the banner, A does not, and the rollback from B to A (`C-05`) is visible in the browser.
