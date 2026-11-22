@@ -1,0 +1,115 @@
+# Deploy demo — automatic deployment of Omkoi Station to Cloud Run (Lab 5, R-07, R-08, C-06)
+#
+# On every push to `main` (a merged release PR) this workflow:
+#   1) runs ci-docker.yml (job `test-and-docker`) first,
+#   2) signs in to Google Cloud with Workload Identity Federation (no key file),
+#   3) builds the root Dockerfile and pushes it tagged with the full commit SHA,
+#   4) runs deploy/release.sh: image digest -> migrate job -> Cloud Run update (+ APP_VERSION),
+#   5) smoke-tests the public URL and writes a summary on the run page.
+# Rollback: "Run workflow" on main with image_tag = the full 40-character SHA of an image
+# that already exists. Tests, build and migration are skipped; the service points back to it.
+#
+# Do not rename: job `test-and-docker` (ci-docker.yml), environment `demo`, variables
+# GCP_PROJECT_ID, GCP_REGION, WIF_PROVIDER, WIF_SERVICE_ACCOUNT, and this file's path:
+# the WIF provider github-main only trusts .github/workflows/deploy.yml on refs/heads/main
+# in environment demo (deploy/setup-wif.sh).
+# The cloud resources must already exist (deploy/deploy.sh); this workflow only updates them.
+
+name: Deploy demo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Rollback: full commit SHA of an existing image. Empty = test, build and deploy current main."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Queue releases; never interrupt a running migration or deployment.
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main' && !inputs.image_tag
+    uses: ./.github/workflows/ci-docker.yml
+
+  deploy:
+    needs: test
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/main' &&
+      (needs.test.result == 'success' ||
+       (github.event_name == 'workflow_dispatch' && inputs.image_tag != '' && needs.test.result == 'skipped'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: demo
+    permissions:
+      contents: read
+      id-token: write # keyless Google Cloud sign-in (WIF)
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      SERVICE_NAME: omkoi-queue
+      MIGRATE_JOB_NAME: omkoi-queue-migrate
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+      ROLLBACK: ${{ inputs.image_tag != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate deployment settings
+        env:
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.WIF_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$PROJECT_ID" && test -n "$REGION" || { echo 'Set GCP_PROJECT_ID and GCP_REGION in environment demo.'; exit 1; }
+          test -n "$WIF_PROVIDER" && test -n "$WIF_SERVICE_ACCOUNT" || { echo 'Set WIF_PROVIDER and WIF_SERVICE_ACCOUNT in environment demo.'; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo 'Image tag must be a full 40-character commit SHA.'; exit 1; }
+
+      - name: Authenticate to Google Cloud without a key
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Build and push image
+        if: env.ROLLBACK != 'true'
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/omkoi-queue/omkoi-queue:$IMAGE_TAG"
+          docker build --tag "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Verify image, migrate and deploy
+        run: bash deploy/release.sh
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Smoke test public URL
+        run: python3 deploy/smoke_test.py "$SERVICE_URL"
+
+      - name: Record deployment
+        run: |
+          REVISION="$(gcloud run services describe "$SERVICE_NAME" --project="$PROJECT_ID" --region="$REGION" --format='value(status.latestReadyRevisionName)')"
+          {
+            echo '### Omkoi Station deployment'
+            echo "- Commit (image tag, APP_VERSION): \`$IMAGE_TAG\`"
+            echo "- Image digest: \`$DEPLOYED_IMAGE\`"
+            echo "- Cloud Run revision: \`$REVISION\`"
+            echo "- Rollback: $ROLLBACK"
+            echo "- URL: $SERVICE_URL"
+            echo '- Smoke test: passed (health, ready/DB, HTML, 401 on /api/categories).'
+          } >> "$GITHUB_STEP_SUMMARY"
