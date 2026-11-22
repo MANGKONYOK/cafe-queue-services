@@ -2,10 +2,10 @@ import { Router } from "express";
 import type { Pool } from "../db/pool.js";
 
 /** Public probes (NFR-04): liveness never touches the database; readiness runs SELECT 1. */
-export function healthRouter(pool: Pool) {
+export function healthRouter(pool: Pool, appVersion: string) {
   const router = Router();
   router.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", version: appVersion }); // which release is running (R-08)
   });
   router.get("/ready", async (_req, res) => {
     try {
