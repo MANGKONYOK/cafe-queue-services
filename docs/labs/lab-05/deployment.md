@@ -35,7 +35,7 @@ The design choices come from the D1 SRS/SDS. Because the app uses its own SQL mi
 | `F-03` counter service | staff only on assigned counters, FIFO `POST /api/categories/:id/call-next` (`FOR UPDATE SKIP LOCKED`), `WAITING → CALLED → SERVING → COMPLETED / NO_SHOW / CANCELLED`, `ticket_events` audit |
 | `F-04` admin counters | create and edit counters, pause and resume, staff list, staff-to-counter assignment on `/admin` |
 
-These are the Sprint 1 features released in D1 (`v1.4.0`) and deployed unchanged in Lab 5. Lab 5 adds no app feature except the release banner in Issue #12 (Release B).
+These are the Sprint 1 features released in D1 (`v1.4.0`) and deployed unchanged in Lab 5. Lab 5 adds one visible change in Issue #12 (Release B): a **release banner** in the bottom-right corner of every page showing `Release <short SHA>`, read from `/api/health`.
 
 ### 1.2 Cloud-Readiness Check
 
@@ -46,7 +46,7 @@ These are the Sprint 1 features released in D1 (`v1.4.0`) and deployed unchanged
 | fail fast | production refuses to start without a 32+ character `SESSION_SECRET`; `trust proxy` on for `Secure` cookies behind Cloud Run |
 | PG sessions | `connect-pg-simple`, table `user_sessions`, cookie `connect.sid`, 8 h absolute expiry |
 | port | binds `0.0.0.0:$PORT` (default 3000), serves `client/dist` |
-| probes | `/api/health` → `200 {"status":"ok"}`; `/api/ready` runs `SELECT 1` → `200` ready or `503` not ready |
+| probes | `/api/health` → `200 {"status":"ok","version":"<APP_VERSION>"}`; `/api/ready` runs `SELECT 1` → `200` ready or `503` not ready |
 
 These six points are why a Cloud Run container can be replaced at any time without losing data or signing users out. `/api/ready` is also what the smoke test uses after every deploy to prove the app can reach Cloud SQL.
 
@@ -68,7 +68,7 @@ These six points are why a Cloud Run container can be replaced at any time witho
 | `POSTGRES_USER` / `POSTGRES_DB` | no | local Docker database user and name | your choice / `omkoi_queue` | not used (Cloud SQL user `omkoi_user`, DB `omkoi_queue`) |
 | `POSTGRES_PASSWORD` | **yes** | local Docker database password | your choice | not used (inside `omkoi-database-url`) |
 | `DB_PORT` | no | host port of the local database | `5432`, or another if taken | not used |
-| `APP_VERSION` | no | commit SHA the app runs (Issue #12) | empty | set by `deploy/release.sh` |
+| `APP_VERSION` | no | commit SHA the app runs; returned by `/api/health` and shown by the release banner | empty = `dev` | set by `deploy/release.sh` on every release |
 
 No secret is committed: both `.env.example` files list key names only, and `scripts/check-secrets.sh` (`TEST-20`) fails CI if a value, a `.env` file or a password in a connection string appears in a tracked file. Locally the values live in `server/.env` (git-ignored); CI uses a throwaway database with trust auth and random seed passwords; Cloud Run reads secrets from Secret Manager and never sees the seed passwords. If a secret is ever pushed, change it where it is used, add a new Secret Manager version, redeploy and tell a TA (handout §4.3).
 
@@ -158,7 +158,7 @@ Every merge into `main` is a release, and only `main` deploys. `deploy/release.s
 | revision + image | `gcloud run services describe omkoi-queue --region asia-southeast1 --format="value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)"` |
 | `APP_VERSION` | `gcloud run services describe omkoi-queue --region asia-southeast1 --format="yaml(spec.template.spec.containers[0].env)" \| grep -A1 APP_VERSION` |
 | image tag → digest | `gcloud artifacts docker images describe asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue:<SHA> --format="value(image_summary.fully_qualified_digest)"` |
-| in the app | the release banner (Issue #12, Release B) shows the same SHA |
+| in the app | the release banner (bottom-right on every page) shows `Release <first 7 characters>`; hover shows the full SHA; `curl -s <URL>/api/health` returns it as `version` |
 
 Each pipeline image is tagged with the full commit SHA and deployed by digest, so the running revision maps to exactly one commit; `APP_VERSION` on the revision states it directly.
 
@@ -172,3 +172,13 @@ Each pipeline image is tagged with the full commit SHA and deployed by digest, s
 | 4 | roll forward | Run workflow again with an empty `image_tag` (or the newer SHA) |
 
 A rollback only changes which image Cloud Run runs. Data and signed-in sessions stay in Cloud SQL, so a ticket created before the rollback and the user's session are still there afterwards. Migrations are additive, so an older image runs safely on the newer schema.
+
+### 5.4 Lab 5 Releases
+
+| tag | release PR | contains | deployed by | revision |
+| :--- | :--- | :--- | :--- | :--- |
+| `v2.3.0` | #17 (`bd2f69e`) | cloud-ready, Docker, CI gate, deploy scripts, WIF script | `deploy/deploy.sh` by hand | `omkoi-queue-00002-pgw` |
+| `v2.5.0` | Release A (TODO PR, SHA) | `deploy.yml`, `APP_VERSION` in `release.sh` (#19) | first **Deploy demo** run | TODO |
+| `v2.6.0` | Release B (TODO PR, SHA) | release banner + `version` in `/api/health` | **Deploy demo** | TODO |
+
+Release A must reach `main` before Release B is merged into `staging`, so the two are separate releases: B shows the banner, A does not, and the rollback from B to A (`C-05`) is visible in the browser.
