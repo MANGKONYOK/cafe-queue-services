@@ -26,7 +26,8 @@ else
   echo 'Rollback: reuse existing image; skip tests, build, migration and seed.'
 fi
 
-gcloud run services update "$SERVICE_NAME" --image="$DIGEST_IMAGE" --project="$PROJECT_ID" --region="$REGION" --quiet
+# APP_VERSION = the commit this image was built from, so the app (and its banner, Release B) shows what is running (R-08).
+gcloud run services update "$SERVICE_NAME" --image="$DIGEST_IMAGE" --update-env-vars="APP_VERSION=$IMAGE_TAG" --project="$PROJECT_ID" --region="$REGION" --quiet
 gcloud run services update-traffic "$SERVICE_NAME" --to-latest --project="$PROJECT_ID" --region="$REGION" --quiet
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')"
