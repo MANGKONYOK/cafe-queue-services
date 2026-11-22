@@ -1,171 +1,184 @@
-# Omkoi Station (`cafe-queue-services`) — Cloud Deployment & CI/CD Runbook (Lab 5)
+# Lab 5 Deployment — Omkoi Station (`cafe-queue-services`)
 
-This runbook documents the production architecture, Sprint 1 cloud-readiness baseline, environment configuration, GCP resources, and repeatable release/rollback procedures for **Omkoi Station** (`cafe-queue-services`), fulfilling Lab 5 requirements **`R-02`**, **`R-04`**, **`R-07`**, and **`R-08`**.
+How Omkoi Station is configured, built, tested, deployed to Google Cloud and released. This is the Lab 5 runbook (handout §4.3) for `R-02`, `R-04`, `R-07` and `R-08`.
 
----
-
-## 1. Application Stack, Sprint 1 Feature Scope & Starter Kit Adaptations
-
-### 1.1 Sprint 1 Vertical Slice Deployed (`F-01` to `F-04`)
-| Feature ID | Feature Name | Cloud-Deployed Capabilities | Primary Modules |
-| :---: | :--- | :--- | :--- |
-| **`F-01`** | **Auth, PG Sessions & Counter Directory** | Email/password sign-in (`bcrypt` cost 10), 8h fixed PostgreSQL sessions (`connect-pg-simple` in `user_sessions`), `/api/auth/me`, `/api/auth/logout`, `/api/health`, `/api/ready` (`SELECT 1`), and counter directory (`GET /api/categories` with live `waitingCount`). | `server/src/routes/auth.ts`, `middleware/auth.ts`, `session.ts`, `routes/health.ts`, `client/src/pages/LoginPage.tsx` |
-| **`F-02`** | **Customer Walk-In Queue Joining & Tracking** | Walk-in ticket creation (`POST /api/tickets`, `partySize` 1–8, optional `specialRequests` <=280 chars), sequential `<PREFIX>-<NNN>` codes (`SB`, `EB`, `DL`, `RC`), live `aheadCount`/`estWaitMins`, customer self-cancel while `WAITING` (`3–200` char reason), and `409` duplicate/closed counter guards. | `server/src/services/tickets.ts` (`joinQueue`), `routes/tickets.ts`, `client/src/pages/QueuePage.tsx` |
-| **`F-03`** | **Staff Counter Console & Service Lifecycle** | Counter-scoped staff queues (`staff_counters` enforced via `canOperate`), concurrency-safe FIFO `POST /api/categories/:id/call-next` (`FOR UPDATE SKIP LOCKED`), state machine (`WAITING -> CALLED -> SERVING -> COMPLETED / NO_SHOW / CANCELLED`), mandatory notes, and immutable `ticket_events` audit rows. | `server/src/services/tickets.ts` (`callNext`), `services/access.ts`, `client/src/pages/StaffPage.tsx` |
-| **`F-04`** | **Admin Counter Management & Pause/Resume** | Admin counter CRUD (`POST /api/categories`, `PATCH /api/categories/:id`), live `isOpen` pause/resume, staff directory (`GET /api/staff`), and staff-to-counter assignment (`PUT /api/categories/:id/staff`) via `/admin`. | `server/src/routes/categories.ts`, `routes/staff.ts`, `client/src/pages/AdminPage.tsx` |
-
-### 1.2 Six-Point Cloud-Readiness Verification
-1. **Stateless Container / Zero Local Disk Storage (`R-04`):** No `multer` disk uploads or in-memory state arrays exist. All application records and sessions persist in PostgreSQL 16 across container restarts and Cloud Run rollbacks.
-2. **Idempotent Natural-Key Seeding:** `server/src/db/seed.ts` uses `ON CONFLICT (email) DO UPDATE` for seeded users, `ON CONFLICT (code) DO UPDATE` for service categories (preserving admin-toggled `is_open` state on re-seed), and `ON CONFLICT DO NOTHING` for `staff_counters`. Production seeding executes compiled JS (`npm run db:seed:prod` -> `node dist/db/seed-cli.js`) reading `SEED_*_PASSWORD` variables strictly from the environment.
-3. **Production Fail-Fast & Proxy Trust:** `loadConfig()` in `server/src/config.ts` refuses to start when `NODE_ENV=production` unless `SESSION_SECRET` is at least 32 characters and not `"change-me"`. When `config.isProduction` is true, `server/src/app.ts` enables `app.set("trust proxy", 1)` for secure session cookies behind Cloud Run's TLS load balancer.
-4. **PostgreSQL-Backed User Sessions (`R-04`):** Express sessions use `connect-pg-simple` targeting table `user_sessions` (`cookie: connect.sid`, 8h non-rolling expiration).
-5. **Environment-Driven Port & Same-Origin SPA Serving:** `server/src/index.ts` binds to `0.0.0.0` on `Number(process.env.PORT) || 3000` and passes `/app/client/dist` as `clientDist` to `createApp()`, serving API routes (`/api/*`) and built React assets from one Cloud Run container.
-6. **Health & DB Readiness Probes (`NFR-04`):** `GET /api/health` returns `200 {"status":"ok"}` and `GET /api/ready` runs `SELECT 1` against PostgreSQL, returning `200 {"status":"ready","db":"connected"}` or `503 {"status":"not_ready","db":"disconnected"}`.
-
-### 1.3 Intentional Changes from `toktickit-lab5-starter` Reference Stack
-- **SQL Migrations instead of Prisma:** Omkoi Station uses pure `pg` with `node-pg-migrate` (`server/db/migrations/001`–`003`) via `npm run db:migrate` and compiled seeding via `npm run db:seed:prod` instead of Prisma (`openssl` and `prisma migrate deploy` are omitted from the Dockerfile).
-- **Explicit Session & Multi-Role Seed Secrets:** Unlike the starter kit's two password secrets, Omkoi Station enforces `SESSION_SECRET` (`omkoi-session-secret`) and three role seed passwords (`omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password`) stored individually in Google Secret Manager with per-secret least-privilege IAM bindings on `omkoi-queue-runner`.
-- **Cookie-Authenticated Endpoints:** `GET /api/categories` requires an authenticated session (`401` when logged out, returns `{"categories": [...]}` when signed in), and `/api/auth/login` uses HTTP-only cookies (`connect.sid`) rather than bearer JWTs, so [`deploy/smoke_test.py`](../../../deploy/smoke_test.py) validates unauthenticated `401` behavior publicly and uses `http.cookiejar.CookieJar` when optional login smoke credentials are supplied.
+| keyword | abstract |
+| :--- | :--- |
+| project | GCP `omkoi-515303`, region `asia-southeast1` |
+| live URL | https://omkoi-queue-tdt4pxa64a-as.a.run.app |
+| released | `v2.5.0` (`1bdb094`, Release A) → Cloud Run revision `omkoi-queue-00003-5mk`, deployed by **Deploy demo** |
+| scripts | `deploy/deploy.sh` (first deploy) · `deploy/setup-wif.sh` (GitHub sign-in) · `deploy/release.sh` (every release) · `deploy/smoke_test.py` · `deploy/teardown.sh` |
+| workflows | `.github/workflows/ci-docker.yml` (job `test-and-docker`) · `.github/workflows/deploy.yml` (Issue #12) |
 
 ---
 
-## 2. Environment Variables & Secrets Configuration (`R-02`)
+## 1. Stack and Changes from the Starter Kit
 
-Zero secrets are committed to Git. All `.env.example` files contain empty key names only (`scripts/check-secrets.sh` / `TEST-20`). Local development uses `server/.env` (gitignored), CI uses an ephemeral `POSTGRES_HOST_AUTH_METHOD=trust` database inside `.github/workflows/ci-docker.yml`, and Cloud Run injects runtime secrets from Google Secret Manager *(provisioned in Issues #11–#12)*.
+| keyword | abstract |
+| :--- | :--- |
+| reference stack | Same as the kit: Artifact Registry, Cloud Run, Cloud SQL for PostgreSQL, Secret Manager, GitHub Actions |
+| one image | Express serves the API (`/api/*`) and the built React client from one container on port 3000 |
+| migrations | `pg` + `node-pg-migrate` (`server/db/migrations/001`–`003`, `npm run db:migrate`) instead of Prisma |
+| seed | compiled `npm run db:seed:prod` (`node dist/db/seed-cli.js`), passwords only from `SEED_*` |
+| secrets | `SESSION_SECRET` + three role seed passwords instead of the kit's two, each its own Secret Manager secret |
+| auth | HTTP-only session cookie `connect.sid` (PostgreSQL `user_sessions`), not bearer tokens |
+| smoke test | checks the public `401` on `/api/categories`; optional login uses a cookie jar |
 
-| Variable Name | Secret? | Purpose | Local Development Source | Production (GCP Cloud Run) Source |
+The design choices come from the D1 SRS/SDS. Because the app uses its own SQL migrations and cookie sessions, the kit's Prisma steps were removed from the `Dockerfile`, and the migrate job runs `npm run db:migrate && npm run db:seed:prod` from the same image. Everything else follows the kit's names and flow, renamed from `toktickit` to `omkoi-queue`.
+
+### 1.1 Sprint 1 Features Deployed (`F-01`–`F-04`)
+
+| keyword | abstract |
+| :--- | :--- |
+| `F-01` sign-in | email/password (`bcrypt` cost 10), 8-hour PostgreSQL sessions, `/api/auth/me`, `/api/auth/logout`, `/api/health`, `/api/ready`, counter list with `waitingCount` |
+| `F-02` join queue | `POST /api/tickets` (party 1–8, request ≤ 280 chars), codes `SB/EB/DL/RC-NNN`, `aheadCount` / `estWaitMins`, self-cancel while `WAITING`, `409` on duplicate or paused counter |
+| `F-03` counter service | staff only on assigned counters, FIFO `POST /api/categories/:id/call-next` (`FOR UPDATE SKIP LOCKED`), `WAITING → CALLED → SERVING → COMPLETED / NO_SHOW / CANCELLED`, `ticket_events` audit |
+| `F-04` admin counters | create and edit counters, pause and resume, staff list, staff-to-counter assignment on `/admin` |
+
+These are the Sprint 1 features released in D1 (`v1.4.0`) and deployed unchanged in Lab 5. Lab 5 adds one visible change in Issue #12 (Release B): a **release banner** in the bottom-right corner of every page showing `Release <short SHA>`, read from `/api/health`.
+
+### 1.2 Cloud-Readiness Check
+
+| keyword | abstract |
+| :--- | :--- |
+| no local disk | no uploads or in-memory state; all records and sessions in PostgreSQL (`R-04`) |
+| safe seed | natural-key upserts (`ON CONFLICT`), keeps an admin's pause state, passwords from env only |
+| fail fast | production refuses to start without a 32+ character `SESSION_SECRET`; `trust proxy` on for `Secure` cookies behind Cloud Run |
+| PG sessions | `connect-pg-simple`, table `user_sessions`, cookie `connect.sid`, 8 h absolute expiry |
+| port | binds `0.0.0.0:$PORT` (default 3000), serves `client/dist` |
+| probes | `/api/health` → `200 {"status":"ok","version":"<APP_VERSION>"}`; `/api/ready` runs `SELECT 1` → `200` ready or `503` not ready |
+
+These six points are why a Cloud Run container can be replaced at any time without losing data or signing users out. `/api/ready` is also what the smoke test uses after every deploy to prove the app can reach Cloud SQL.
+
+---
+
+## 2. Environment Variables (`R-02`)
+
+| variable | secret | purpose | local (`server/.env`) | Cloud Run |
 | :--- | :---: | :--- | :--- | :--- |
-| `PORT` | No | HTTP port listened on by Express (`0.0.0.0`) | `server/.env` (`3000`) | Cloud Run env (`3000`) |
-| `NODE_ENV` | No | Runtime mode (`development`, `test`, `production`) | `server/.env` (`development`) | Cloud Run env (`production`) |
-| `DATABASE_URL` | **Yes** | PostgreSQL 16 connection URI (TCP locally; Unix socket `/cloudsql/...` on Cloud Run) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue`) | Secret Manager (`omkoi-database-url:latest`) |
-| `PG_POOL_MAX` | No | PostgreSQL connections per process (1–50, default `10`). Cloud Run sets `5`, so 3 instances (15) plus the migrate job stay under `db-f1-micro`'s 25 connections | `server/.env` (empty = `10`) | Cloud Run env (`5`, set by `deploy/deploy.sh`) |
-| `TEST_DATABASE_URL` | **Yes** | Isolated test database URI for Vitest suites (`TEST-01`..`TEST-25`) | `server/.env` (`postgresql://<user>:<password>@localhost:5432/omkoi_queue_test`) | CI workflow service DB only (not needed in Cloud Run) |
-| `SESSION_SECRET` | **Yes** | Signs `connect.sid` cookies; must be >= 32 chars in `production` | `server/.env` | Secret Manager (`omkoi-session-secret:latest`) |
-| `SEED_ADMIN_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for seeded `admin@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-admin-password:latest`) on migrate job |
-| `SEED_STAFF_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for `barista@omkoi.coffee` & `dessert@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-staff-password:latest`) on migrate job |
-| `SEED_CUSTOMER_PASSWORD` | **Yes** | Password hashed (`bcrypt` cost 10) for `boom@omkoi.coffee` & `hongtae@omkoi.coffee` | `server/.env` | Secret Manager (`omkoi-customer-password:latest`) on migrate job |
-| `POSTGRES_USER` | No | Local Docker Compose PostgreSQL superuser | `server/.env` | Cloud SQL instance user (`omkoi_user`, managed by `deploy.sh`) |
-| `POSTGRES_PASSWORD` | **Yes** | Local Docker Compose PostgreSQL password | `server/.env` | Cloud SQL generated password stored in `omkoi-database-url` |
-| `POSTGRES_DB` | No | Primary application PostgreSQL database name | `server/.env` (`omkoi_queue`) | Cloud SQL database (`omkoi_queue`) |
-| `DB_PORT` | No | Host port mapped by local `docker-compose.yml` | `server/.env` (`5432`) | Not used in Cloud Run (connects via Cloud SQL Unix socket) |
+| `PORT` | no | HTTP port | `3000` | `3000` (`--port`) |
+| `NODE_ENV` | no | `development` / `test` / `production` | `development` | `production` |
+| `DATABASE_URL` | **yes** | PostgreSQL URI: `postgresql://<user>:<password>@localhost:<port>/omkoi_queue` locally; Cloud SQL socket on Cloud Run | your local DB | Secret Manager `omkoi-database-url` |
+| `PG_POOL_MAX` | no | connections per process (1–50, default 10) | empty = 10 | `5` (set by `deploy.sh`) |
+| `TEST_DATABASE_URL` | **yes** | separate DB for `test:server` and e2e | your local test DB | not used (CI uses its own) |
+| `SESSION_SECRET` | **yes** | signs `connect.sid`; 32+ characters in production | random | Secret Manager `omkoi-session-secret` |
+| `SEED_ADMIN_PASSWORD` | **yes** | `admin@omkoi.coffee` | your choice | `omkoi-admin-password` (migrate job only) |
+| `SEED_STAFF_PASSWORD` | **yes** | `barista@` and `dessert@omkoi.coffee` | your choice | `omkoi-staff-password` (migrate job only) |
+| `SEED_CUSTOMER_PASSWORD` | **yes** | `boom@` and `hongtae@omkoi.coffee` | your choice | `omkoi-customer-password` (migrate job only) |
+| `POSTGRES_USER` / `POSTGRES_DB` | no | local Docker database user and name | your choice / `omkoi_queue` | not used (Cloud SQL user `omkoi_user`, DB `omkoi_queue`) |
+| `POSTGRES_PASSWORD` | **yes** | local Docker database password | your choice | not used (inside `omkoi-database-url`) |
+| `DB_PORT` | no | host port of the local database | `5432`, or another if taken | not used |
+| `APP_VERSION` | no | commit SHA the app runs; returned by `/api/health` and shown by the release banner | empty = `dev` | set by `deploy/release.sh` on every release |
+
+No secret is committed: both `.env.example` files list key names only, and `scripts/check-secrets.sh` (`TEST-20`) fails CI if a value, a `.env` file or a password in a connection string appears in a tracked file. Locally the values live in `server/.env` (git-ignored); CI uses a throwaway database with trust auth and random seed passwords; Cloud Run reads secrets from Secret Manager and never sees the seed passwords. If a secret is ever pushed, change it where it is used, add a new Secret Manager version, redeploy and tell a TA (handout §4.3).
 
 ---
 
-## 3. Local Build, Migrate, Seed, Test & Run Commands
+## 3. Commands
 
-From the repository root (`cafe-queue-services/`):
+| keyword | command (repository root) |
+| :--- | :--- |
+| configure | `cp .env.example server/.env`, then fill in every key |
+| install | `npm run install:all` |
+| database (dev) | `npm run db:up` · `npm run db:migrate` · `npm run db:seed` |
+| run (dev) | `npm run dev:server` (:3000) · `npm run dev:client` (:5173) |
+| build | `npm run build` · then `npm --prefix server run db:seed:prod` · `npm --prefix server start` |
+| test | `npm run typecheck` · `npm run test:server` · `npm run test:client` · `npm run e2e` · `npm run check:secrets` |
+| Docker stack (`C-03`) | `npm run stack:up` (= `docker compose --env-file server/.env up --build -d`) · `stack:ps` · `stack:logs` · `stack:restart` · `stack:down` |
+| check | `curl -s http://localhost:3000/api/ready` · `python3 deploy/smoke_test.py http://localhost:3000` |
 
-1. **Copy templates and configure local environment:**
-   - Copy `.env.example` (or `server/.env.example`) to `server/.env` and fill in values (never commit `server/.env`).
-2. **Install dependencies & start local PostgreSQL 16:**
-   ```bash
-   npm run install:all
-   npm run db:up
-   ```
-3. **Run SQL migrations and idempotent seed:**
-   ```bash
-   npm run db:migrate
-   npm run db:seed
-   ```
-4. **Build TypeScript server (`dist/`) & Vite React client (`client/dist/`), then run production build locally:**
-   ```bash
-   npm run build
-   npm --prefix server run db:seed:prod
-   npm --prefix server start
-   ```
-   *(For local hot-reload development, run `npm run dev:server` and `npm run dev:client` in separate terminals.)*
-5. **Run all verification suites & secret scan:**
-   ```bash
-   npm run typecheck
-   npm run test:server
-   npm run test:client
-   npm run e2e
-   npm run check:secrets
-   ```
-6. **Build & run unified production Docker container locally (Issue #9 / `C-03`):**
-   > **Note:** The production `Dockerfile` defaults `NODE_ENV=production` (`Secure` cookies behind Cloud Run HTTPS). Local `docker-compose.yml` overrides `NODE_ENV=development` on the `app` service so `connect.sid` session cookies work over plain `http://localhost:3000`, and sets `COMPOSE_DB_HOST=db` so `docker-entrypoint.sh` routes `DATABASE_URL` to the Compose `db` container.
-   The root scripts always pass `--env-file server/.env`, so `DB_PORT` and `PORT` come from your env file (plain `docker compose up` falls back to host port `5432`, which may already be taken).
-   ```bash
-   npm run stack:up       # build the image; start db, run migrate (db:migrate + db:seed:prod), then app
-   npm run stack:ps       # migrate: Exited (0); db: healthy; app: Up
-   curl -s http://localhost:3000/api/health
-   curl -s http://localhost:3000/api/ready
-   npm run stack:restart  # restart the app container; sessions and tickets stay in the omkoi-db volume
-   npm run stack:logs     # follow the app logs (Ctrl+C to stop following)
-   npm run stack:down     # stop and remove containers; the omkoi-db volume (data) is kept
-   ```
+Day-to-day work runs with the database in Docker and the app on your machine (hot reload). The Docker stack runs the **same image as Cloud Run** in the same order: `db`, then `migrate` (`db:migrate` + `db:seed:prod`, exits 0), then `app` on :3000. Compose sets `NODE_ENV=development` on `app` so the session cookie works over plain `http://localhost`, and `COMPOSE_DB_HOST=db` so `docker-entrypoint.sh` points `DATABASE_URL` at the `db` container. The `stack:*` scripts always pass `--env-file server/.env`; plain `docker compose up` would use host port 5432, which may already be taken. `stack:down` keeps the `omkoi-db` volume.
 
 ---
 
-## 4. GCP Project, Region & Resource Names
+## 4. GCP Resources
 
-> **Status (22 Nov 2026):** all resources below are live (Issue #11). `.github/workflows/deploy.yml` is added in Issue #12 (Release A).
-
-Deployment scripts (`deploy/deploy.sh`, `deploy/release.sh`, `deploy/teardown.sh`) and GitHub Actions workflows reference these consistent identifiers:
-
-| Resource | Identifier / Setting | Notes |
+| keyword | resource | setting |
 | :--- | :--- | :--- |
-| **GCP Project ID** | `omkoi-515303` | Passed as `GCP_PROJECT_ID` in GitHub `demo` Environment; not a secret |
-| **GCP Region** | `asia-southeast1` | Passed as `GCP_REGION` in GitHub `demo` Environment |
-| **Artifact Registry Repo** | `omkoi-queue` | Format: Docker (`asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue`) |
-| **Cloud SQL Instance** | `omkoi-queue-db` | `POSTGRES_16`, `--edition=enterprise`, `--tier=db-f1-micro`, `--no-storage-auto-increase` |
-| **Cloud SQL Database / User** | `omkoi_queue` / `omkoi_user` | Unix socket `/cloudsql/omkoi-515303:asia-southeast1:omkoi-queue-db` |
-| **Cloud Run Service** | `omkoi-queue` | Public HTTPS (`--allow-unauthenticated`), port `3000`, `min-instances=0`, `max-instances=3`, `512Mi` |
-| **Cloud Run Migration Job** | `omkoi-queue-migrate` | Runs `npm run db:migrate && npm run db:seed:prod` before every service update |
-| **Runtime Service Account** | `omkoi-queue-runner` | Least-privilege IAM: `roles/cloudsql.client` + per-secret `roles/secretmanager.secretAccessor` |
-| **GitHub Deployer SA** | `omkoi-queue-deployer` | Authenticated keyless via WIF (`roles/run.developer`, repo-scoped `roles/artifactregistry.writer`, `roles/iam.serviceAccountUser`) |
-| **Workload Identity Pool / Provider** | `github-actions` / `github-main` | Locked to `MANGKONYOK/cafe-queue-services`, `refs/heads/main`, `deploy.yml`, `environment:demo` |
-| **Secret Manager Secrets** | `omkoi-database-url`, `omkoi-session-secret`, `omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password` | Created idempotently by `deploy/deploy.sh` |
+| project | `omkoi-515303` · `asia-southeast1` | Free Trial on a personal Gmail; alerts-only budget USD 10 |
+| registry | Artifact Registry `omkoi-queue` | `asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue:<tag>` |
+| database | Cloud SQL `omkoi-queue-db` | PostgreSQL 16, `--edition=enterprise`, `db-f1-micro`, 10 GB, `--no-storage-auto-increase`; DB `omkoi_queue`, user `omkoi_user`; socket `/cloudsql/omkoi-515303:asia-southeast1:omkoi-queue-db` |
+| app | Cloud Run `omkoi-queue` | public, port 3000, min 0, max 3, 512 MiB, `PG_POOL_MAX=5` |
+| migrate | Cloud Run job `omkoi-queue-migrate` | `npm run db:migrate && npm run db:seed:prod` before every service update |
+| runner | service account `omkoi-queue-runner` | `roles/cloudsql.client` + `secretAccessor` on each of the 5 secrets only |
+| deployer | service account `omkoi-queue-deployer` | `roles/run.developer`, `artifactregistry.writer` on `omkoi-queue`, `serviceAccountUser` on the runner; no keys |
+| GitHub sign-in | WIF pool `github-actions` / provider `github-main` | repo `1450043053`, owner `183930344`, `refs/heads/main`, `deploy.yml`, environment `demo` |
+| secrets | Secret Manager | `omkoi-database-url`, `omkoi-session-secret`, `omkoi-admin-password`, `omkoi-staff-password`, `omkoi-customer-password` |
 
-**Keyless GitHub → GCP sign-in (Issue #11, Guide 6.2–6.3):** after the first `deploy/deploy.sh`, run `DRY_RUN=1 bash deploy/setup-wif.sh`, read the printed attribute condition and commands, then run `bash deploy/setup-wif.sh`. It creates `omkoi-queue-deployer` (no keys), grants only `roles/run.developer`, `roles/artifactregistry.writer` on `omkoi-queue` and `roles/iam.serviceAccountUser` on `omkoi-queue-runner`, creates the pool `github-actions` and provider `github-main` (repository `1450043053`, owner `183930344`, `refs/heads/main`, `deploy.yml`, environment `demo`), and prints the four `demo` environment variables. It is idempotent and checked offline by `deploy/tests/test_wif_stub.sh` in CI.
-
+`deploy/deploy.sh` creates everything from the registry to the secrets, builds the first image with Cloud Build, runs the migrate job and deploys the service; it is idempotent, so running it again only rebuilds and redeploys. `deploy/setup-wif.sh` then creates the deployer and the WIF pool/provider. Cloud SQL is the only real cost (billed every hour it exists): keep Cloud Run at min 0, pause the instance when nobody tests (`--activation-policy=NEVER`), and run `deploy/teardown.sh` after grading.
 
 ### 4.1 First Deployment and Merge Gate (Issue #11)
 
-| Item | Result |
+| keyword | result |
 | :--- | :--- |
-| Trial deploy | 21 Nov 2026, `bash deploy/deploy.sh` from `fix/11-pre-deploy` (image `:latest`, revision `omkoi-queue-00001-lrf`); not used as evidence |
-| Evidence deploy | 22 Nov 2026, `bash deploy/deploy.sh` from `main` at tag **`v2.3.0`** (`bd2f69e`, release PR #17), revision **`omkoi-queue-00002-pgw`** |
-| Public URL | https://omkoi-queue-tdt4pxa64a-as.a.run.app (same service: https://omkoi-queue-6605140384.asia-southeast1.run.app) |
-| Smoke test | `python3 deploy/smoke_test.py <URL>`: health, ready/DB, HTML, 401 on `/api/categories` all PASS |
-| Domain workflow (`C-04`) | customer joins SB (`SB-001`), staff calls, serves and completes it, admin sees every counter; signed-out `/api/tickets?categoryId=1` returns `401`, signed-in customer gets `403` |
-| WIF | `bash deploy/setup-wif.sh`: deployer `omkoi-queue-deployer` (no keys), pool `github-actions`, provider `github-main` ACTIVE |
-| GitHub environment | `demo`: deployment branch `main`, variables `GCP_PROJECT_ID`, `GCP_REGION`, `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT` |
-| Ruleset `protect-main` (`R-06`) | Active, empty bypass list, target `main`: restrict deletions, block force pushes, PR with 1 approval, required check `test-and-docker` |
-| Gate proof (`C-02`) | PR #18 from `test/prove-gate` (one intentionally failing assertion in `server/tests/config.test.ts`): `test-and-docker` failed, merge state **BLOCKED**, closed unmerged |
+| trial deploy | 21 Nov 2026, `deploy.sh` from `fix/11-pre-deploy` (image `:latest`, revision `omkoi-queue-00001-lrf`); not evidence |
+| evidence deploy | 22 Nov 2026, `deploy.sh` from `main` at **`v2.3.0`** (`bd2f69e`, release PR #17) → revision **`omkoi-queue-00002-pgw`** |
+| URL | https://omkoi-queue-tdt4pxa64a-as.a.run.app (same service: https://omkoi-queue-6605140384.asia-southeast1.run.app) |
+| smoke test | health, ready/DB, HTML and `401` on `/api/categories`: PASS |
+| `C-04` | customer joins SB, staff calls, serves and completes, admin sees all counters; a signed-in customer on `/api/tickets?categoryId=1` gets `403` |
+| WIF | `setup-wif.sh`: deployer without keys, provider `github-main` ACTIVE |
+| environment `demo` | deployment branch `main`; variables `GCP_PROJECT_ID`, `GCP_REGION`, `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT` |
+| `protect-main` (`R-06`) | Active, empty bypass list, target `main`: restrict deletions, block force pushes, PR + 1 approval, required check `test-and-docker` |
+| gate proof (`C-02`) | PR #18 from `test/prove-gate` (one failing assertion in `server/tests/config.test.ts`): check failed, merge **BLOCKED**, closed unmerged |
+
+The trial deploy found nothing to fix, so the evidence deploy reused the same database and secrets and only rebuilt the image from the released `main` commit. The gate proof used a throwaway branch so the released application was never touched.
+
+### 4.2 Keyless GitHub Sign-In
+
+| keyword | abstract |
+| :--- | :--- |
+| preview | `DRY_RUN=1 bash deploy/setup-wif.sh` prints the attribute condition and every `gcloud` command |
+| apply | `bash deploy/setup-wif.sh`, after the first `deploy.sh` |
+| output | the four `demo` variables for GitHub |
+| tested | `deploy/tests/test_wif_stub.sh` in CI (no GCP calls) |
+
+GitHub Actions never holds a password or key: on `main`, inside environment `demo`, `deploy.yml` receives a short-lived token from GitHub, Google checks the condition (this repository, `main`, `deploy.yml`, `demo`) and lends it `omkoi-queue-deployer` for that run only. A pull-request branch, a fork or another workflow is refused. The deployer can deploy Cloud Run and push images, but cannot read secrets, change IAM or create databases.
 
 ---
 
-## 5. Repeatable Release, Running Commit Check & Rollback Procedure (`R-07`, `R-08`)
+## 5. Release, Running Commit and Rollback (`R-07`, `R-08`)
 
-> **Status:** `ci-docker.yml`, `deploy/*`, WIF, `demo` and `protect-main` are live (Issues #10–#11). `.github/workflows/deploy.yml` is added in Issue #12 (Release A, `v2.5.0`).
+### 5.1 Release Pipeline
 
-### 5.1 Standard Release Pipeline (`feature/* -> staging -> main`)
-1. Create a GitHub Issue labeled `lab5` on the 6-column Kanban board and branch off `staging`.
-2. Open a Pull Request into `staging`; verify `.github/workflows/ci-docker.yml` (`test-and-docker`) passes (`R-05`). Teammate reviews with specific technical comments and merges (`Author != Reviewer`, `R-09`).
-3. Open a **Release PR** from `staging` into `main`. GitHub ruleset `protect-main` (empty bypass list, configured in Issue #11) requires 1 teammate approval and green `test-and-docker` before merge (`R-06`).
-4. Merging into `main` triggers `.github/workflows/deploy.yml` (configured in Issue #12, `R-07`):
-   - Re-runs `test-and-docker`,
-   - Authenticates to GCP via Workload Identity Federation (no JSON key files),
-   - Builds and pushes image tagged with the 40-character `GITHUB_SHA`,
-   - Executes `deploy/release.sh` (resolves immutable `@sha256` digest -> updates and runs `omkoi-queue-migrate` -> updates `omkoi-queue` to that digest with `APP_VERSION=<40-char SHA>` and routes 100% traffic to latest),
-   - Runs `python3 deploy/smoke_test.py "$SERVICE_URL"`.
+| # | keyword | abstract |
+| :---: | :--- | :--- |
+| 1 | Issue | labelled `lab5`; branch from `staging` (`<type>/<n>-<keyword>`) |
+| 2 | PR → `staging` | `test-and-docker` must pass; the other member reviews with a specific comment and merges (`R-09`) |
+| 3 | release PR → `main` | `protect-main`: 1 approval + green `test-and-docker` (`R-06`) |
+| 4 | `deploy.yml` | on the push to `main`: `test-and-docker` → WIF sign-in → build and push `omkoi-queue:<full SHA>` → `deploy/release.sh` → `smoke_test.py` → run summary |
+| 5 | tag | tag the merge commit (`v2.3.0`, `v2.5.0`, `v2.6.0`) |
 
-### 5.2 Identifying Which Commit Is Running in Production (`R-08`)
-Run either command in Cloud Shell / terminal (or inspect the **Revisions** tab in Google Cloud Console for `omkoi-queue` and the `Deploy demo` GitHub Actions job summary):
-```bash
-gcloud run services describe omkoi-queue --region asia-southeast1 \
-  --format="value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)"
-gcloud run services describe omkoi-queue --region asia-southeast1 \
-  --format="yaml(spec.template.spec.containers[0].env)" | grep -A1 APP_VERSION
-gcloud artifacts docker images describe \
-  "asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue:<40_CHAR_SHA>" \
-  --format="value(image_summary.fully_qualified_digest)"
-```
-Match the active revision's `@sha256:...` digest to the commit tag `<40_CHAR_SHA>` in Artifact Registry and the `Deploy demo` run summary. Every pipeline release also sets `APP_VERSION` to that SHA on the revision (Release B shows it in the app).
+Every merge into `main` is a release, and only `main` deploys. `deploy/release.sh` finds the image's exact `@sha256` digest, runs `omkoi-queue-migrate` on it and stops if the migration fails, then updates `omkoi-queue` to that digest with `APP_VERSION=<SHA>` and sends it 100 % of traffic. Settings and secrets are never touched by a release. `v2.3.0` was deployed by hand with `deploy.sh` before `deploy.yml` existed; from Release A (`v2.5.0`) every release goes through the pipeline.
 
-### 5.3 Rollback & Roll-Forward Procedure (`R-08`, `C-05`)
-1. Find the full **40-character commit SHA** of the target prior release in GitHub (`main` history or previous `Deploy demo` run summary).
-2. In GitHub **Actions -> Deploy demo -> Run workflow**, paste that 40-char SHA into **`image_tag`** and click **Run workflow**.
-3. When `image_tag` is set, `deploy.yml` skips tests, image build, and migrations (`ROLLBACK=true`) and switches `omkoi-queue` directly to the previously built immutable `@sha256` digest. Because data and `user_sessions` reside in Cloud SQL, signed-in sessions and queue tickets persist across rollbacks.
-4. To roll forward, trigger **Run workflow** again with an empty `image_tag` (or the newer 40-char SHA).
+### 5.2 Which Commit Is Running
+
+| keyword | where to look |
+| :--- | :--- |
+| run summary | GitHub → Actions → **Deploy demo** → the run: commit, digest, revision, URL |
+| revision + image | `gcloud run services describe omkoi-queue --region asia-southeast1 --format="value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)"` |
+| `APP_VERSION` | `gcloud run services describe omkoi-queue --region asia-southeast1 --format="yaml(spec.template.spec.containers[0].env)" \| grep -A1 APP_VERSION` |
+| image tag → digest | `gcloud artifacts docker images describe asia-southeast1-docker.pkg.dev/omkoi-515303/omkoi-queue/omkoi-queue:<SHA> --format="value(image_summary.fully_qualified_digest)"` |
+| in the app | the release banner (bottom-right on every page) shows `Release <first 7 characters>`; hover shows the full SHA; `curl -s <URL>/api/health` returns it as `version` |
+
+Each pipeline image is tagged with the full commit SHA and deployed by digest, so the running revision maps to exactly one commit; `APP_VERSION` on the revision states it directly.
+
+### 5.3 Rollback and Roll-Forward (`C-05`)
+
+| # | keyword | abstract |
+| :---: | :--- | :--- |
+| 1 | find SHA | the full 40-character SHA of the earlier release (`main` history or its Deploy demo run) |
+| 2 | roll back | Actions → **Deploy demo** → Run workflow on `main` with `image_tag` = that SHA |
+| 3 | what runs | tests, build and migration are skipped (`ROLLBACK=true`); the service switches to that image's digest and `APP_VERSION` |
+| 4 | roll forward | Run workflow again with an empty `image_tag` (or the newer SHA) |
+
+A rollback only changes which image Cloud Run runs. Data and signed-in sessions stay in Cloud SQL, so a ticket created before the rollback and the user's session are still there afterwards. Migrations are additive, so an older image runs safely on the newer schema.
+
+### 5.4 Lab 5 Releases
+
+| tag | release PR | contains | deployed by | revision |
+| :--- | :--- | :--- | :--- | :--- |
+| `v2.3.0` | #17 (`bd2f69e`) | cloud-ready, Docker, CI gate, deploy scripts, WIF script | `deploy/deploy.sh` by hand | `omkoi-queue-00002-pgw` |
+| `v2.5.0` | Release A: #20 (`1bdb094`) | `deploy.yml`, `APP_VERSION` in `release.sh` (#19) | first **Deploy demo** run [45037979858](https://github.com/MANGKONYOK/cafe-queue-services/actions/runs/45037979858) | `omkoi-queue-00003-5mk` (`APP_VERSION=1bdb094…`) |
+| `v2.6.0` | Release B (TODO PR, SHA) | release banner + `version` in `/api/health` | **Deploy demo** | TODO |
+
+Release A must reach `main` before Release B is merged into `staging`, so the two are separate releases: B shows the banner, A does not, and the rollback from B to A (`C-05`) is visible in the browser.

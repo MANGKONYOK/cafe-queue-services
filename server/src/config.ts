@@ -11,6 +11,8 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(1),
   // Connections per process. Cloud Run sets 5 so 3 instances stay under db-f1-micro's 25 (deployment design D-1).
   PG_POOL_MAX: z.coerce.number().int().min(1).max(50).default(DEFAULT_POOL_MAX),
+  // Commit SHA of the running release; deploy/release.sh sets it on Cloud Run (C-06, R-08).
+  APP_VERSION: z.string().max(64).default("dev"),
 });
 
 export interface Config {
@@ -20,6 +22,7 @@ export interface Config {
   databaseUrl: string;
   sessionSecret: string;
   poolMax: number;
+  appVersion: string;
 }
 
 export class ConfigError extends Error {}
@@ -45,5 +48,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: c.DATABASE_URL,
     sessionSecret: c.SESSION_SECRET,
     poolMax: c.PG_POOL_MAX,
+    appVersion: c.APP_VERSION,
   };
 }

@@ -34,6 +34,15 @@ describe("TEST-20 / NFR-02: configuration from the environment, no committed sec
     }
   });
 
+  it("reads APP_VERSION as the running release, \"dev\" when unset (C-06, R-08)", () => {
+    const dev = { ...base, NODE_ENV: "development", SESSION_SECRET: "s" };
+    expect(loadConfig(dev).appVersion).toBe("dev");
+    expect(loadConfig({ ...dev, APP_VERSION: "" }).appVersion).toBe("dev");
+    const sha = "bd2f69e93c3913d55840017289d68a61049a4e75";
+    expect(loadConfig({ ...dev, APP_VERSION: sha }).appVersion).toBe(sha);
+    expect(() => loadConfig({ ...dev, APP_VERSION: "x".repeat(65) })).toThrow(ConfigError);
+  });
+
   it("exits the server process at startup in production without a secret", () => {
     const run = spawnSync(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: path.resolve(here, ".."),

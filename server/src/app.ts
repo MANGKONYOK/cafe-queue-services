@@ -24,7 +24,7 @@ export function createApp({ config, pool, clientDist }: AppOptions) {
   if (config.isProduction) app.set("trust proxy", 1); // Secure cookies behind Cloud Run's proxy
   app.use(express.json({ limit: "10kb" }));
 
-  app.use("/api", healthRouter(pool));
+  app.use("/api", healthRouter(pool, config.appVersion));
   app.use("/api", sessionMiddleware(config, pool));
   app.use("/api/auth", authRouter(config, pool));
   app.use("/api/categories", categoriesRouter(pool));

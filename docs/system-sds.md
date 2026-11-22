@@ -234,7 +234,7 @@ All application errors return standard HTTP error status codes with an `error` e
 
 | Method | Path | Required Auth & Roles | Request Body | Success Response | Error Status Codes & Conditions |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/health` | Public | None | `200 OK` `{"status":"ok"}` | - |
+| `GET` | `/api/health` | Public | None | `200 OK` `{"status":"ok","version":"<APP_VERSION or dev>"}` | - |
 | `GET` | `/api/ready` | Public | None | `200 OK` `{"status":"ready","db":"connected"}` | `503 Service Unavailable` if database ping fails |
 | `POST` | `/api/auth/login` | Public | `{"email","password"}` | `200 OK` `{"user":{id,email,fullName,role}}` (+ `assignedCategoryIds` for `STAFF`/`ADMIN`) + Session Cookie | `400` Missing fields, `401` Invalid credentials |
 | `POST` | `/api/auth/logout` | `CUSTOMER`, `STAFF`, `ADMIN` | None | `200 OK` `{"status":"logged_out"}`; session row deleted, cookie cleared | `401` Unauthenticated |
