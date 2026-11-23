@@ -3,16 +3,17 @@
 ## 1. System Architecture & Component Design
 
 The Omkoi Station cafe system uses a three-tier decoupled architecture:
-1. **Frontend Presentation Tier (`client/`):** A responsive Single Page Application built with React 18, Vite and Tailwind CSS. Implements the **Natural Luxury** design system (60% warm roasted walnut/terracotta, 30% highland mist lime-wash, 10% pine olive green), managing client-side form validation, role-based screen routing and asynchronous API communication with session cookie credentials (`credentials: 'include'`).
-2. **Application & API Services Tier (`server/`):** A stateless Node.js 20 application built with Express. Enforces authentication via HTTP-only session cookies, Role-Based Access Control (RBAC) and domain business logic (`BR-01` to `BR-07`, `BR-09`, `BR-10`) in a dedicated service layer before invoking database operations.
-3. **Data Persistence Tier (Pure PostgreSQL 16):** A relational database storing users, persistent session data, service counter configurations, queue tickets and immutable lifecycle transition events.
+1. **Frontend Presentation Tier (`client/`):** A responsive Single Page Application built with React 18, Vite and Tailwind CSS. Implements the **Natural Luxury** design system (60% warm roasted walnut/terracotta, 30% highland mist lime-wash, 10% pine olive green), managing client-side form validation, role-based screen routing (`/login`, `/queue`, `/staff`, `/admin`, and `/analytics` in Sprint 3) and asynchronous API communication with session cookie credentials (`credentials: 'include'`).
+2. **Application & API Services Tier (`server/`):** A stateless Node.js 20 application built with Express. Enforces authentication via HTTP-only session cookies, Role-Based Access Control (RBAC) and domain business logic (`BR-01` to `BR-14`) in a dedicated service layer before invoking database operations.
+3. **Data Persistence Tier (Pure PostgreSQL 16):** A relational database storing users, persistent session data, service counter configurations, menu items, queue tickets, ticket itemizations, immutable lifecycle transition events, tasting feedback and staff assignments.
 
 ```mermaid
 flowchart TD
     subgraph Client["Frontend Client (React 18 + Vite)"]
         UI_Login["Sign-In Screen\n(/login)"]
-        UI_Customer["Customer Queue Portal\n(/queue)\n- Category Cards\n- Join Form\n- My Tickets & Cancel"]
-        UI_Staff["Barista Counter Console\n(/staff)\n- Assigned Counter Tabs\n- Call Next / Serve / Complete / No-Show"]
+        UI_Customer["Customer Queue Portal\n(/queue)\n- Category Cards, Join, Cancel\n- Order Items & Audit History\n- Post-Service Rating (Sprint 3)"]
+        UI_Staff["Barista Counter Console\n(/staff)\n- Assigned Counter Tabs\n- Call Next / Recall / Serve / Complete\n- Order Items & Audit History"]
+        UI_Analytics["Operational Analytics\n(/analytics, Sprint 3)"]
     end
 
     subgraph Server["Backend API Server (Node.js 20 + Express on PORT=3000)"]
@@ -20,19 +21,20 @@ flowchart TD
         MW_Auth["Auth & RBAC Middleware\n(requireAuth, requireRole, assertOwnership, assertStaffScope)"]
         
         Router_Auth["/api/auth\n(login, logout, me)"]
-        Router_Cat["/api/categories\n(list, get, call-next)"]
-        Router_Ticket["/api/tickets\n(create, my, list, get, cancel, serve, complete, no-show)"]
+        Router_Cat["/api/categories & /api/menu\n(list, create, update, staff, call-next, menu)"]
+        Router_Ticket["/api/tickets\n(create, my, list, get, lifecycle, items, events, recall, feedback)"]
+        Router_Analytics["/api/analytics/summary\n(Sprint 3 metrics)"]
         Router_Health["/api/health & /api/ready\n(liveness & DB readiness)"]
         
-        SVC_Queue["Queue Domain Service\n(Enforces BR-01..BR-07, BR-09, BR-10)"]
+        SVC_Queue["Queue Domain Service\n(Enforces BR-01..BR-14)"]
     end
 
     subgraph Database["Pure PostgreSQL 16 (Local Docker / Cloud SQL)"]
         DB_Sessions[("user_sessions\n(sid, sess, expire)")]
         DB_Users[("users\n(id, email, password_hash, role)")]
-        DB_Categories[("service_categories\n(id, code, prefix, est_mins, is_open)")]
-        DB_Tickets[("queue_tickets\n(id, code, category_id, customer_id, status, timestamps)")]
-        DB_Events[("ticket_events\n(id, ticket_id, actor_id, from_status, to_status, note)")]
+        DB_Categories[("service_categories & menu_items\n(counters & Omkoi menu)")]
+        DB_Tickets[("queue_tickets & ticket_items\n(tickets, recall_count, line items)")]
+        DB_Events[("ticket_events & ticket_feedback\n(audit log & 1-5 star ratings)")]
         DB_Staff[("staff_counters\n(staff_id, category_id)")]
     end
 
@@ -43,10 +45,12 @@ flowchart TD
     MW_Auth --> Router_Auth
     MW_Auth --> Router_Cat
     MW_Auth --> Router_Ticket
+    MW_Auth --> Router_Analytics
     MW_Auth --> Router_Health
     
     Router_Ticket --> SVC_Queue
     Router_Cat --> SVC_Queue
+    Router_Analytics --> SVC_Queue
     
     SVC_Queue --> DB_Users
     SVC_Queue --> DB_Categories
@@ -71,6 +75,13 @@ erDiagram
     QUEUE_TICKETS ||--o{ TICKET_EVENTS : "ticket_id (logs history)"
     USERS ||--o{ STAFF_COUNTERS : "staff_id (assigned)"
     SERVICE_CATEGORIES ||--o{ STAFF_COUNTERS : "category_id (staffed by)"
+
+    SERVICE_CATEGORIES ||--o{ MENU_ITEMS : "category_id (offers)"
+    QUEUE_TICKETS ||--o{ TICKET_ITEMS : "ticket_id (itemized)"
+    MENU_ITEMS ||--o{ TICKET_ITEMS : "menu_item_id (selected)"
+    USERS ||--o{ TICKET_ITEMS : "added_by_user_id (attaches)"
+    QUEUE_TICKETS ||--o| TICKET_FEEDBACK : "ticket_id (rated once)"
+    USERS ||--o{ TICKET_FEEDBACK : "customer_id (authors)"
 
     USERS {
         int id PK
@@ -107,12 +118,35 @@ erDiagram
         string completion_summary "VARCHAR(500)"
         string cancel_reason "VARCHAR(200)"
         string no_show_note "VARCHAR(200)"
+        int recall_count "DEFAULT 0 (005)"
+        timestamp last_recalled_at "NULLABLE (005)"
         timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
         timestamp called_at "NULLABLE"
         timestamp serving_started_at "NULLABLE"
         timestamp completed_at "NULLABLE"
         timestamp cancelled_at "NULLABLE"
         timestamp no_show_at "NULLABLE"
+    }
+
+    MENU_ITEMS {
+        int id PK
+        int category_id FK "NOT NULL REFERENCES service_categories(id)"
+        string code UK "NOT NULL (004)"
+        string name "VARCHAR(120) NOT NULL"
+        string description "TEXT"
+        int price_thb "CHECK (price_thb > 0)"
+        boolean is_available "DEFAULT true"
+        timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    TICKET_ITEMS {
+        int id PK
+        int ticket_id FK "NOT NULL REFERENCES queue_tickets(id) ON DELETE CASCADE"
+        int menu_item_id FK "NOT NULL REFERENCES menu_items(id)"
+        int added_by_user_id FK "NOT NULL REFERENCES users(id)"
+        int quantity "CHECK (quantity BETWEEN 1 AND 20)"
+        string brew_note "VARCHAR(160)"
+        timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
     }
 
     TICKET_EVENTS {
@@ -122,6 +156,15 @@ erDiagram
         string from_status "NULLABLE"
         string to_status "NOT NULL"
         string note "TEXT"
+        timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    TICKET_FEEDBACK {
+        int id PK
+        int ticket_id FK "UNIQUE REFERENCES queue_tickets(id) ON DELETE CASCADE (006)"
+        int customer_id FK "NOT NULL REFERENCES users(id)"
+        int rating "CHECK (rating BETWEEN 1 AND 5)"
+        string comment "VARCHAR(500)"
         timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
     }
 
@@ -168,6 +211,11 @@ Schema changes are numbered SQL files in `server/db/migrations/`, applied in ord
 | `001_auth_and_categories` | `users`, `user_sessions`, `service_categories` | `F-01` |
 | `002_queue_tickets` | `queue_tickets` (with `seq_no`, checks and `one_active_ticket` index), `ticket_events` | `F-02` |
 | `003_staff_counters` | `staff_counters` | `F-03` |
+| `004_ticket_items` | `menu_items`, `ticket_items` (`BR-13`) | `F-05` (Sprint 2) |
+| `005_ticket_recall` | `queue_tickets.recall_count`, `queue_tickets.last_recalled_at` (`BR-14`) | `F-06` (Sprint 2) |
+| `006_ticket_feedback` | `ticket_feedback` with `UNIQUE (ticket_id)` (`BR-08`) | `F-07` (Sprint 3) |
+
+*(Feature `F-08` Operational Analytics requires no new migration; it aggregates existing `service_categories`, `queue_tickets`, and `ticket_feedback` tables.)*
 
 ### 2.4 Idempotent Seed Specification (`npm run db:seed`)
 The seed script uses `ON CONFLICT DO UPDATE / NOTHING` on natural keys (`email`, `code`, `(staff_id, category_id)`) and never inserts explicit ids, so the `SERIAL` sequences stay correct for rows created later (for example by `F-04`). It refuses to run when a `SEED_*_PASSWORD` variable is missing:
@@ -204,9 +252,10 @@ ON CONFLICT (code) DO UPDATE SET
 | Screen | Route | Roles | Main content | Calls |
 | :--- | :--- | :--- | :--- | :--- |
 | Sign-In | `/login` | Public | Email/password form; safe `401` banner (no hint which field was wrong). | `POST /api/auth/login` |
-| Customer Queue Portal | `/queue` | `CUSTOMER` | Category cards (open/paused), join form, my tickets with status, `aheadCount` and a cancel dialog. | `GET /api/categories`, `POST /api/tickets`, `GET /api/tickets/my`, `POST /api/tickets/:id/cancel` |
+| Customer Queue Portal | `/queue` | `CUSTOMER` | Category cards (open/paused), join form, my tickets with status, `aheadCount`, Order Items & Audit History drawers (`F-05`/`F-06`), 1-5 star rating card (`F-07`), cancel dialog. | `GET /api/categories`, `GET /api/menu`, `POST /api/tickets`, `GET /api/tickets/my`, `/items`, `/events`, `/feedback`, `/cancel` |
 | Counter Admin | `/admin` | `ADMIN` | One card per counter: pause/resume, edit name/minutes/description, staff checkboxes; new-counter form (`F-04`). | `GET /api/categories`, `GET /api/staff`, `POST`/`PATCH /api/categories`, `PUT /api/categories/:id/staff` |
-| Barista Counter Console | `/staff` | `STAFF`, `ADMIN` | One tab per assigned counter (Admin: all), status filter, **Call next**, Start serving, Complete / No-show / Cancel dialogs. | `GET /api/tickets`, `POST /api/categories/:id/call-next`, transition endpoints |
+| Barista Counter Console | `/staff` | `STAFF`, `ADMIN` | One tab per assigned counter (Admin: all), status filter, **Call next**, **Recall guest** (`F-06`), Start serving, Complete / No-show / Cancel dialogs, Order Items & Audit History drawers, read-only rating (`F-07`). | `GET /api/tickets`, `POST /api/categories/:id/call-next`, `/recall`, `/items`, `/events`, `/feedback`, transition endpoints |
+| Station Analytics | `/analytics` | `STAFF`, `ADMIN` | KPI summary cards (totals, avg wait/service mins, no-show rate, avg rating), per-counter table, hourly throughput & date range filter (`F-08`). | `GET /api/analytics/summary` |
 
 - **Navigation:** On load the client calls `GET /api/auth/me`. `401` redirects to `/login`; after login `CUSTOMER` lands on `/queue` and `STAFF`/`ADMIN` on `/staff`. A route of another role redirects to the user's home. The header shows the user's name and a **Sign out** button. Hidden routes are a convenience only; the API enforces every permission (section 4).
 - **Loading:** Every data region shows a skeleton or spinner until its first response; action buttons are disabled while their request is pending (no double submit).
@@ -253,6 +302,15 @@ All application errors return standard HTTP error status codes with an `error` e
 | `POST` | `/api/tickets/:id/serve` | `STAFF` (assigned counter), `ADMIN` | None | `200 OK` `{"ticket":{...}}` | `401` Unauth, `403` if `CUSTOMER` or unassigned counter, `404` Not found, `409` Not in `CALLED` state (`BR-04`) |
 | `POST` | `/api/tickets/:id/complete` | `STAFF` (assigned counter), `ADMIN` | `{"completionSummary":"Served 2x V60 Mae Tuen Washed"}` | `200 OK` `{"ticket":{...}}` | `400` Missing summary (`BR-05`), `403` if `CUSTOMER` or unassigned counter, `404` Not found, `409` Not in `SERVING` state (`BR-04`) |
 | `POST` | `/api/tickets/:id/no-show` | `STAFF` (assigned counter), `ADMIN` | `{"noShowNote":"Called 3x over 5 mins, no response"}` | `200 OK` `{"ticket":{...}}` | `400` Missing note (`BR-05`), `403` if `CUSTOMER` or unassigned counter, `404` Not found, `409` Not in `CALLED` state (`BR-04`) |
+| `GET` | `/api/menu` | `CUSTOMER`, `STAFF`, `ADMIN` | Query: `?categoryId=` | `200 OK` `{"items":[...]}` (`F-05`) | `400` Invalid `categoryId`, `401` Unauth |
+| `GET` | `/api/tickets/:id/items` | Owner `CUSTOMER`, `STAFF` (assigned), `ADMIN` | None | `200 OK` `{"items":[...],"totalItems":2,"totalPriceThb":440}` (`F-05`) | `400`, `401`, `403` Non-owner / unassigned counter, `404` (`STAFF`/`ADMIN`) |
+| `POST` | `/api/tickets/:id/items` | Owner `CUSTOMER` (`WAITING`/`CALLED`), `STAFF`/`ADMIN` (`WAITING`/`CALLED`/`SERVING`) | `{"menuItemId":1,"quantity":2,"brewNote":"Less ice"}` | `201 Created` `{"item":{...}}` (`F-05`, `BR-13`) | `400` Bad qty/note or `CATEGORY_MISMATCH`/`ITEM_UNAVAILABLE`, `401`, `403`, `404`, `409` Status locked |
+| `DELETE` | `/api/tickets/:id/items/:itemId` | Same as `POST /items` | None | `200 OK` `{"deletedItemId":10}` (`F-05`, `BR-13`) | `400`, `401`, `403`, `404`, `409` Status locked |
+| `GET` | `/api/tickets/:id/events` | Owner `CUSTOMER`, `STAFF` (assigned), `ADMIN` | None | `200 OK` `{"events":[...]}` with `actorName` & `actorRole` (`F-06`) | `400`, `401`, `403` Non-owner / unassigned counter, `404` (`STAFF`/`ADMIN`) |
+| `POST` | `/api/tickets/:id/recall` | `STAFF` (assigned counter), `ADMIN` | `{"note":"Called 2nd time"}` (optional) | `200 OK` `{"ticket":{...},"event":{...}}` (`F-06`, `BR-14`) | `400` `note > 200`, `401`, `403` `CUSTOMER` or unassigned counter, `404`, `409` Not `CALLED` |
+| `POST` | `/api/tickets/:id/feedback` | Owner `CUSTOMER` (`COMPLETED` only, once) | `{"rating":5,"comment":"Clean floral finish"}` | `201 Created` `{"feedback":{...}}` (`F-07`, `BR-08`) | `400` Bad rating/comment, `401`, `403` Non-owner / `STAFF` / `ADMIN`, `409` Not `COMPLETED` or `DUPLICATE_FEEDBACK` |
+| `GET` | `/api/tickets/:id/feedback` | Owner `CUSTOMER`, `STAFF` (assigned), `ADMIN` | None | `200 OK` `{"feedback":{...} or null}` (`F-07`) | `400`, `401`, `403`, `404` (`STAFF`/`ADMIN`) |
+| `GET` | `/api/analytics/summary` | `STAFF` (assigned counters), `ADMIN` (all) | Query: `?from=&to=` | `200 OK` `{"range":{...},"station":{...},"byCategory":[...],"hourlyThroughput":[...]}` (`F-08`) | `400` Invalid/inverted dates, `401`, `403` `CUSTOMER` |
 
 Checks run in a fixed order so every endpoint refuses predictably: `401` session -> `403` role -> `403` ownership/counter scope -> `404` -> `400` body -> `409` rule. For a `CUSTOMER`, a ticket that is not theirs returns `403` whether or not it exists.
 
@@ -279,6 +337,14 @@ All authorization checks are enforced server-side inside Express middleware (`re
 | `POST /api/tickets/:id/complete` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST /api/tickets/:id/no-show` | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 | `POST/PATCH/PUT /api/categories/*` incl. staff assignment, `GET /api/staff` (`F-04`) | `401` | `403 Forbidden` | `403 Forbidden` | Allowed | `requireRole(['ADMIN'])` |
+| `GET /api/menu` (`F-05`) | `401` | Allowed | Allowed | Allowed | `requireAuth` middleware |
+| `GET /api/tickets/:id/items` (`F-05`) | `401` | Own ticket only (`403` if foreign) | Assigned counters only | Allowed (All) | `assertTicketOwnerOrStaff` + `assertStaffScope` |
+| `POST/DELETE /api/tickets/:id/items*` (`F-05`) | `401` | Own ticket (`WAITING`/`CALLED` only) | Assigned counters (`WAITING`/`CALLED`/`SERVING`) | Allowed (`WAITING`/`CALLED`/`SERVING`) | `assertTicketOwnerOrStaff` + `assertStaffScope` + `BR-13` |
+| `GET /api/tickets/:id/events` (`F-06`) | `401` | Own ticket only (`403` if foreign) | Assigned counters only | Allowed (All) | `assertTicketOwnerOrStaff` + `assertStaffScope` |
+| `POST /api/tickets/:id/recall` (`F-06`) | `401` | `403 Forbidden` | Assigned counters (`CALLED` only) | Allowed (`CALLED` only) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` + `BR-14` |
+| `POST /api/tickets/:id/feedback` (`F-07`) | `401` | Own ticket (`COMPLETED` only, once) | `403 Forbidden` | `403 Forbidden` | `requireRole(['CUSTOMER'])` + `assertTicketOwner` + `BR-08` |
+| `GET /api/tickets/:id/feedback` (`F-07`) | `401` | Own ticket only (`403` if foreign) | Assigned counters only | Allowed (All) | `assertTicketOwnerOrStaff` + `assertStaffScope` |
+| `GET /api/analytics/summary` (`F-08`) | `401` | `403 Forbidden` | Assigned counters only | Allowed (All) | `requireRole(['STAFF', 'ADMIN'])` + `assertStaffScope` |
 
 ---
 

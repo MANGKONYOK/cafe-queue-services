@@ -80,8 +80,8 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
   - `POST /api/tickets/:id/no-show` (`CALLED -> NO_SHOW`, records `no_show_at` and mandatory `noShowNote`)
   - `POST /api/tickets/:id/cancel` (`WAITING/CALLED -> CANCELLED`, records `cancelled_at` and mandatory `cancelReason`)
 - **`FR-08` (Admin Category Management - Sprint 1):** Admin users shall be able to create, update and toggle the open/paused intake state (`is_open`) of service categories (`POST /api/categories`, `PATCH /api/categories/:id`), list staff accounts (`GET /api/staff`) and set which staff are assigned to each category (`PUT /api/categories/:id/staff`).
-- **`FR-09` (Ticket Itemization & Audit Log - Sprint 2):** The system shall expose the immutable log of every state transition (`ticket_events`, written since Sprint 1 by `FR-03`, `FR-05` and `FR-07`) through `GET /api/tickets/:id/events` and allow attaching beverage/pastry items to tickets (`POST /api/tickets/:id/items`).
-- **`FR-10` (Customer Feedback & Operational Analytics - Sprint 3):** Customers shall be able to submit a 1-5 star rating on their own `COMPLETED` tickets (`POST /api/tickets/:id/feedback`) and Staff/Admin shall access aggregated operational metrics (`GET /api/analytics/summary`).
+- **`FR-09` (Ticket Itemization, Audit Log & Barista Recall - Sprint 2):** The system shall expose the Omkoi Station counter menu (`GET /api/menu`), allow attaching and removing beverage/pastry items on active tickets (`GET/POST /api/tickets/:id/items`, `DELETE /api/tickets/:id/items/:itemId`), expose the immutable transition log (`GET /api/tickets/:id/events`, written since Sprint 1), and let assigned staff/admin log guest recall attempts on `CALLED` tickets (`POST /api/tickets/:id/recall`).
+- **`FR-10` (Customer Feedback & Operational Analytics - Sprint 3):** Customers shall be able to submit and view a 1-5 star tasting rating on their own `COMPLETED` tickets (`POST /api/tickets/:id/feedback`, `GET /api/tickets/:id/feedback`) and Staff/Admin shall access counter-scoped aggregated operational metrics (`GET /api/analytics/summary`).
 
 ---
 
@@ -107,6 +107,8 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
 - **`BR-10` (Call-Next FIFO Ordering):** Calling a customer always takes the oldest `WAITING` ticket (lowest `seq_no`) of the chosen category; the client cannot choose which ticket is called. An empty queue returns HTTP `409 Conflict` (`QUEUE_EMPTY`). Two simultaneous call-next requests on one category call two different tickets.
 - **`BR-11` (Counter Identity):** A counter's `code` (3-30 characters, `A-Z`, digits, `_`) and `prefix` (2-5 letters) are unique and never change after creation, because issued ticket codes use them; a duplicate returns HTTP `409 Conflict` (`DUPLICATE_CATEGORY`). `estMinsPerTicket` is an integer from 1 to 240.
 - **`BR-12` (Pause Blocks New Joins Only):** Pausing a counter (`is_open = false`) refuses new joins (`BR-02`) but never strands guests already in its queue: their `WAITING`, `CALLED` and `SERVING` tickets can still be called, served, completed, marked no-show or cancelled.
+- **`BR-13` (Ticket Itemization Invariants - Sprint 2):** Ticket line items (`menuItemId`, `quantity` integer `1-20`, optional `brewNote` <= 160 chars) must reference an available `menu_items` entry belonging to the same `service_categories` counter as the ticket (`400 VALIDATION_ERROR` otherwise). Owner `CUSTOMER` accounts may attach/remove items only while `WAITING` or `CALLED`; assigned-counter `STAFF` and `ADMIN` may attach/remove items while `WAITING`, `CALLED`, or `SERVING`; terminal tickets reject mutations (`409 INVALID_STATE_TRANSITION`).
+- **`BR-14` (Recall Tracking Invariant - Sprint 2):** Baristas (assigned counter `STAFF` or `ADMIN`) may record a recall attempt (`POST /api/tickets/:id/recall`) only while a ticket is in `CALLED` status (`409 INVALID_STATE_TRANSITION` otherwise). Each recall atomically increments `recall_count`, sets `last_recalled_at`, and appends an immutable `CALLED -> CALLED` row in `ticket_events` (optional trimmed `note` <= 200 chars, defaulting to `"Customer re-called at counter"`).
 
 ---
 
@@ -163,4 +165,4 @@ The ideas below are recorded so they are not lost. They are **not** in scope, ha
 | `Q-02` | Does a barista choose which ticket to call? | No. The server calls the oldest `WAITING` ticket of the counter (`BR-10`, decision 5). | Resolved (PR #4 review) |
 | `Q-03` | Do ticket numbers reset daily? | No. Numbers rise per counter and are never reused (`BR-07`, `A-04`). | Resolved (PR #4 review) |
 | `Q-04` | Can a customer cancel after being called? | No. Once `CALLED`, only staff cancel (`BR-06`). | Resolved |
-| `Q-05` | Which Deliverable 1 deadline applies? The handout (v1) states 8 Nov 2026 23:59; the team plan uses 15 Nov 2026 23:59. | Confirm the extension on LEB2 and cite it in the submitted PDF. | Open |
+| `Q-05` | Which Deliverable 1 deadline applies? The handout (v1) states 8 Nov 2026 23:59; the team plan uses 15 Nov 2026 23:59. | Submitted Deliverable 1 on 15 Nov 2026 (`v1.4.0`) per the extended LEB2 schedule. | Resolved (Deliverable 1) |

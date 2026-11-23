@@ -9,21 +9,23 @@ gantt
     title Omkoi Station Three-Sprint Delivery Roadmap
     dateFormat  YYYY-MM-DD
     section Sprint 1
-    Baseline & Contracts (Issue #1)     :done, 2026-11-08, 2026-11-09
-    F-01 Auth, Sessions & RBAC (Issue #2):active, 2026-11-09, 2026-11-12
-    F-02, F-03 & F-04 Queue Lifecycle + Admin (Issue #3):2026-11-12, 2026-11-15
-    Deliverable 1 Submission & Release Tag:milestone, 2026-11-15, 0d
+    Baseline & Contracts (Issue #1)       :done, 2026-11-08, 2026-11-09
+    F-01 Auth, Sessions & RBAC (Issue #2) :done, 2026-11-09, 2026-11-12
+    F-02, F-03 & F-04 Queue + Admin (#3)  :done, 2026-11-12, 2026-11-15
+    Deliverable 1 Submission (v1.4.0)     :milestone, done, 2026-11-15, 0d
     section Lab 5
-    Docker, CI/CD & Cloud Run Delivery   :2026-11-13, 2026-11-15
-    section Sprint 2
-    F-05 Beverage Itemization on Tickets :2026-11-16, 2026-11-25
-    F-06 Audit Log & Recall Tracking     :2026-11-25, 2026-11-29
-    Deliverable 2 Submission & Lab 6 UAT :milestone, 2026-11-29, 0d
-    section Sprint 3
-    F-07 Customer Tasting Rating         :2026-11-30, 2026-12-05
-    F-08 Operational Analytics Dashboard :2026-12-05, 2026-12-10
-    Final Release, Video & Verification  :2026-12-10, 2026-12-13
-    Final Delivery Submission (13 Dec)   :milestone, 2026-12-13, 0d
+    Docker, CI/CD & Cloud Run (v2.6.0)    :done, 2026-11-15, 2026-11-22
+    section Sprint 2 & D2
+    Issue #23 Sprint 2 & 3 Contracts      :active, 2026-11-23, 2026-11-24
+    Issue #24 F-05 Beverage Itemization   :2026-11-24, 2026-11-26
+    Issue #25 F-06 Audit & Recall (v2.7.0):2026-11-26, 2026-11-28
+    Issue #26 F-07 Tasting Rating (RC1)   :2026-11-28, 2026-11-29
+    Deliverable 2 Submission (29 Nov)     :milestone, 2026-11-29, 0d
+    section Sprint 3 & Final
+    Final Exam Period Buffer              :2026-12-01, 2026-12-11
+    F-08 Operational Analytics Dashboard  :2026-12-05, 2026-12-10
+    Lab 6/7 UAT Re-tests & 4-min Video    :2026-12-10, 2026-12-13
+    Final Delivery Submission (13 Dec)    :milestone, 2026-12-13, 0d
 ```
 
 ---
@@ -60,30 +62,29 @@ gantt
 
 ### Sprint 2: Operational Expansion & Menu Itemization
 - **Milestone Deadline:** Sunday, 29 November 2026, 23:59
-- **Target Deliverables:** Project Deliverable 2
-- **Sprint Goal:** Attach Omkoi signature beverage/dessert items to tickets and expose the immutable transition audit trail for cross-team user acceptance testing (counter administration moved to Sprint 1).
-- **Included Features:**
-  - **`F-05`:** Highland Beverage & Pastry Itemization on Tickets (Attaching menu items, temperature/roast preferences and generating ticket itemization summaries).
-  - **`F-06`:** Ticket Audit Trail View (`GET /api/tickets/:id/events` over the `ticket_events` rows written since Sprint 1) and Barista Customer Recall Tracking (Timestamping multiple call attempts before marking `NO_SHOW`).
-- **Dependencies:** Sprint 1 core ticket state machine and database models.
+- **Target Deliverables:** Project Deliverable 2 (`v2.7.0` Sprint 2 release on `main`, followed by `v3.0.0-rc1` with `F-07` Sprint 3 progress)
+- **Sprint Goal:** Attach Omkoi signature beverage/dessert items to tickets and expose the immutable transition audit trail + barista recall tracking (`F-05`, `F-06`), contract all Sprint 3 features (`F-07`, `F-08`), and deliver tested Sprint 3 progress (`F-07`) integrated on Cloud Run.
+- **Delivery Issues:**
+  - **Issue `#23` (Contracts & Plan Baseline, `docs/23-sprint2-sprint3-contracts`):** Complete contracts, AC (`AC-21`–`AC-33`), and STS (`TEST-26`–`TEST-38`) for `F-05`–`F-08` plus updated SRS/SDS/Traceability before any runtime code (`staging` only, leaving `main` at `v2.6.0` during Lab 6 UAT).
+  - **Issue `#24` (`F-05`):** Highland Beverage & Pastry Itemization (`004_ticket_items.sql`, `GET /api/menu`, `/items`, `BR-13`, TDD `TEST-26`–`TEST-29`).
+  - **Issue `#25` (`F-06`):** Immutable Ticket Audit Trail & Barista Recall Tracking (`005_ticket_recall.sql`, `GET /events`, `POST /recall`, `BR-14`, TDD `TEST-30`–`TEST-33`) → Sprint 2 Release **`v2.7.0`**.
+- **Dependencies:** Sprint 1 core ticket state machine and database models (`v1.4.0` / `v2.6.0`).
 - **Completion Outcome & Evidence:**
-  - Itemized tickets verified in UI and database.
-  - Defect management logs and bug fixes from Lab 6 Cross-Team UAT incorporated into `docs/sprints/sprint-2/`.
+  - Itemized tickets, audit events, and recall tracking verified in UI, API, and Cloud SQL PostgreSQL 16.
+  - Defect management logs and bug fixes from Lab 6 Cross-Team UAT incorporated into the change/defect register (`docs/traceability.md` §5).
 
 ---
 
 ### Sprint 3: Customer Feedback, Operational Analytics & Product Hardening
-- **Milestone Deadline:** Sunday, 13 December 2026, 23:59
+- **Checkpoint Deliverable 2 Progress (by 29 November 2026):**
+  - **Issue `#26` (`F-07`):** Customer Post-Service Tasting Rating & Review (`006_ticket_feedback.sql`, `BR-08`, `POST/GET /api/tickets/:id/feedback`, TDD `TEST-34`–`TEST-36`) integrated with Sprints 1 & 2 and deployed to Cloud Run as **`v3.0.0-rc1`**.
+- **Milestone Deadline (Final Delivery):** Sunday, 13 December 2026, 23:59 *(planned around the 1–11 December final examination period)*
 - **Target Deliverables:** Final Project Delivery
-- **Sprint Goal:** Complete closed-loop customer tasting feedback, provide station managers with operational analytics, resolve all technical debt and package the final release.
-- **Included Features:**
-  - **`F-07`:** Customer Post-Service Tasting Rating & Review (1 to 5 stars + tasting comment on own `COMPLETED` tickets, single-submission rule `BR-08`).
-  - **`F-08`:** Station Operational Analytics Dashboard (Visual metrics for average wait times, barista service durations, counter volume distribution and no-show rates).
-  - **Product Hardening:** Final performance optimization, comprehensive E2E regression suite, responsive UI touch-up and accessibility polish.
-- **Dependencies:** Sprint 2 audit events and completed tickets.
-- **Completion Outcome & Evidence:**
-  - Final verified release tagged on `main`.
-  - 4-minute demonstration video highlighting the 4-zone hospitality concept, complete domain journeys and production reliability.
+- **Sprint Goal:** Deliver station-wide operational analytics (`F-08`), complete Lab 6/7 UAT fixes and re-tests, run full end-to-end verification, and submit the final release and 4-minute video.
+- **Remaining Bounded Completion Plan (30 Nov – 13 Dec):**
+  - **`F-08` (3–8 Dec):** Station Operational Analytics Dashboard (`GET /api/analytics/summary`, `/analytics`, `TEST-37`–`TEST-38`, zero new migrations).
+  - **Hardening & Re-tests (8–12 Dec):** Resolve any remaining Lab 6/Lab 7 defects, run full regression & responsive E2E suite on the final release tag.
+  - **Final Packaging (12–13 Dec):** Record 4-minute demo video covering the 4-zone hospitality concept, live domain journeys, and Cloud Run reliability.
 
 ---
 
